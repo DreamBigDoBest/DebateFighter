@@ -1336,9 +1336,9 @@ header{
     </div>
     <!-- Labels -->
     <div class="gauge-labels">
-      <span class="gauge-label-ai">◀ AI Advantage</span>
+      <span class="gauge-label-ai"   id="gaugeLabelLeft">◀ AI Advantage</span>
       <span class="gauge-label-center">Gauge Point</span>
-      <span class="gauge-label-user">User Advantage ▶</span>
+      <span class="gauge-label-user"  id="gaugeLabelRight">User Advantage ▶</span>
     </div>
     <!-- Knockout indicator -->
     <div class="ko-indicator" id="koIndicator" style="display:none">
@@ -1386,7 +1386,7 @@ header{
     <div class="statement-card user-card" id="userCard">
       <div class="stmt-hdr">
         <div class="stmt-avatar user">🎤</div>
-        <div class="stmt-name user">You</div>
+        <div class="stmt-name user" id="userCardName">You</div>
         <div class="stmt-badge done" id="userBadge">–</div>
       </div>
       <div class="stmt-stance" id="userStance"></div>
@@ -2646,8 +2646,17 @@ function matchStart() {
   // Populate UI
   document.getElementById('matchTopicLabel').textContent = S.topic || '—';
   const _pt = document.getElementById('panelTopicText'); if(_pt) _pt.textContent = S.topic || '—';
-  document.getElementById('aiName').textContent =
-    S.mode === 'multiplayer' ? 'Opponent\'s Response' : `Opponent's Response`;
+  if (S.mode === 'multiplayer') {
+    document.getElementById('aiName').textContent        = 'Opponent (P2)';
+    document.getElementById('userCardName').textContent  = 'You (P1)';
+    document.getElementById('gaugeLabelLeft').textContent  = '◀ P2 Advantage';
+    document.getElementById('gaugeLabelRight').textContent = 'P1 Advantage ▶';
+  } else {
+    document.getElementById('aiName').textContent        = "Opponent's Response";
+    document.getElementById('userCardName').textContent  = 'You';
+    document.getElementById('gaugeLabelLeft').textContent  = '◀ AI Advantage';
+    document.getElementById('gaugeLabelRight').textContent = 'User Advantage ▶';
+  }
 
   // Reset state
   M.gameTimerSecs = 600;
@@ -2692,7 +2701,10 @@ function matchStart() {
 function mpMatchInit_P2() {
   document.getElementById('matchTopicLabel').textContent = S.topic || '—';
   const _pt2 = document.getElementById('panelTopicText'); if(_pt2) _pt2.textContent = S.topic || '—';
-  document.getElementById('aiName').textContent = 'Opponent\'s Response';
+  document.getElementById('aiName').textContent        = 'Opponent (P1)';
+  document.getElementById('userCardName').textContent  = 'You (P2)';
+  document.getElementById('gaugeLabelLeft').textContent  = '◀ P1 Advantage';
+  document.getElementById('gaugeLabelRight').textContent = 'P2 Advantage ▶';
   M.gameTimerSecs = 600;
   M.starPos       = 0.5;
   M.koCount       = 0;
@@ -2705,6 +2717,10 @@ function mpMatchInit_P2() {
   // MP-FIX-05: reset side assignments so applyStateFromP1 re-applies them
   S.userSide = ''; S.aiSide = '';
   S.forStance = ''; S.againstStance = '';
+  // Bug-06: reset P2 TTS + turn-started state
+  _p2LastP1Text  = '';
+  _p2TurnStarted = false;
+  _p2StmtSent    = false;
   setStarPos(0.5);
   updateKoUI();
   updateTurnTimerUI();
@@ -2980,9 +2996,12 @@ function handleKnockoutLogic() {
     return;
   }
 
-  // Show KO banner
+  // KO banner — use P1/P2 labels in multiplayer
+  const defenderName = M.koAttacker === 'user'
+    ? (mp.active ? 'P2' : 'AI')
+    : (mp.active ? 'P1' : 'You');
   const koMsgs = {
-    1: `💥 KNOCKOUT! ${M.koAttacker === 'user' ? 'AI' : 'You'} must defend! (${M.koCount}/3)`,
+    1: `💥 KNOCKOUT! ${defenderName} must defend! (${M.koCount}/3)`,
     2: `💥 STILL IN THE RED ZONE! Defend again! (${M.koCount}/3)`,
     3: `💥 FINAL DEFENSE! Last chance! (${M.koCount}/3)`,
   };
@@ -3335,11 +3354,14 @@ async function callJudge(userText, aiText) {
   const aiSide2   = S.aiSide   || '反方';  // '反方' or '正方'
   const humanSideEN = humanSide === '正方' ? 'FOR (supporting the proposition)' : 'AGAINST (opposing the proposition)';
   const aiSideEN2   = aiSide2   === '正方' ? 'FOR (supporting the proposition)' : 'AGAINST (opposing the proposition)';
+  // In multiplayer use P1/P2 labels so the judge doesn't reference "AI"
+  const humanLabel = mp.active ? 'P1' : 'Human';
+  const aiLabel    = mp.active ? 'P2' : 'AI';
 
   const systemPrompt =
     `You are an experienced competitive debate judge. Topic: "${S.topic}".\n` +
-    `HUMAN is ${humanSide} — ${humanSideEN}.\n` +
-    `AI is ${aiSide2} — ${aiSideEN2}.\n\n` +
+    `${humanLabel} is ${humanSide} — ${humanSideEN}.\n` +
+    `${aiLabel} is ${aiSide2} — ${aiSideEN2}.\n\n` +
     `Score each side on 5 criteria (0-10 each):\n` +
     `  1. RELEVANCE — Is the argument directly on-topic AND consistent with the speaker's own side (${humanSide}/${aiSide2})? Arguing the OPPONENT'S side = 0 for this criterion.\n` +
     `  2. LOGIC — Is the reasoning coherent and free of fallacies?\n` +
@@ -3366,7 +3388,7 @@ async function callJudge(userText, aiText) {
         model:'gpt-4o',
         messages:[
           {role:'system',content:systemPrompt},
-          {role:'user',  content:`Human (${humanSide}): "${userText||'(no statement — skipped)'}"\nAI (${aiSide2}): "${aiText||'(no statement — skipped)'}"\nJudge this exchange.`},
+          {role:'user',  content:`${humanLabel} (${humanSide}): "${userText||'(no statement — skipped)'}"\n${aiLabel} (${aiSide2}): "${aiText||'(no statement — skipped)'}"\nJudge this exchange.`},
         ],
         max_tokens:150, temperature:0.2,
         response_format:{type:'json_object'},
@@ -3446,6 +3468,10 @@ const mp = {
   mySeq:  0,
   p2Seq:  0,
 };
+// Bug-06: P1's last spoken text, stored on P2 for TTS playback before mic opens
+let _p2LastP1Text    = '';
+// Bug-06: guard so P2's turn-start TTS+timer fires only once per turn
+let _p2TurnStarted   = false;
 
 // ── Lobby UI helpers ─────────────────────────────────────────
 function lobbyOpen() {
@@ -3586,6 +3612,9 @@ function receiveFromP2(data) {
     mp.p2Seq = data.seq;
     // P2's voice statement arrives — process as the "opponent" turn
     handleP2Statement(data.text || '');
+  } else if (data.type === 'rematch') {
+    // Bug-05: P2 requested rematch — P1 initiates
+    doRematch();
   }
 }
 
@@ -3614,6 +3643,12 @@ function receiveFromP1(data) {
   } else if (data.type === 'match_start') {
     // P2 does UI-only init — no timer, no runTurn (P1 drives all game logic)
     mpMatchInit_P2();
+  } else if (data.type === 'p1_spoke') {
+    // Bug-06: store P1's latest spoken text so TTS can play before P2's mic opens
+    _p2LastP1Text = data.text || '';
+  } else if (data.type === 'rematch') {
+    // Bug-05: P1 initiated rematch — P2 follows
+    doRematch();
   }
 }
 
@@ -3654,16 +3689,33 @@ function applyStateFromP1(data) {
     updateGameTimerUI();
   }
   if (data.turnTimerSecs !== undefined) {
-    M.turnTimerSecs = data.turnTimerSecs;
-    updateTurnTimerUI();
+    // Bug-02 fix: don't override P2's own running turn timer
+    // (P1 broadcasts a static 30 during the AI/P2 phase, which would reset P2's countdown)
+    if (!M.turnTimerInt) {
+      M.turnTimerSecs = data.turnTimerSecs;
+      updateTurnTimerUI();
+    }
   }
-  // Update turn banner + bottom-bar badge
-  if (data.turnBanner) {
+  // Update turn banner — flip perspective for P2
+  // (P1 says "⏳ Opponent's TURN" but P2 should see "🎤 YOUR TURN", and vice-versa)
+  if (data.turnBanner !== undefined) {
     const tb = document.getElementById('turnBanner');
-    if (tb) { tb.textContent = data.turnBanner; tb.className = data.turnBannerCls || 'turn-banner'; }
+    if (tb) {
+      const isMyTurnPhase = (data.turn === 'ai')   && (data.phase === 'ai_speak');
+      const isP1TurnPhase = (data.turn === 'user') && (data.phase === 'user_prep' || data.phase === 'user_record');
+      let bannerText = data.turnBanner;
+      let bannerCls  = data.turnBannerCls || 'turn-banner';
+      if (isMyTurnPhase) {
+        bannerText = '🎤 YOUR TURN — Press mic to speak (30s)';
+        bannerCls  = 'turn-banner user-turn';
+      } else if (isP1TurnPhase) {
+        bannerText = '⏳ Opponent\'s TURN — Waiting…';
+        bannerCls  = 'turn-banner ai-turn';
+      }
+      tb.textContent = bannerText;
+      tb.className   = bannerCls;
+    }
     // Sync mbbTurnBadge for P2
-    // In P1's model: 'user' = P1, 'ai' = P2.
-    // So when data.turn==='ai' it is P2's (our) turn.
     const isP2Turn = (data.turn === 'ai');
     const badge = document.getElementById('mbbTurnBadge');
     if (badge) {
@@ -3671,7 +3723,7 @@ function applyStateFromP1(data) {
       if (isP2Turn && data.phase === 'ai_speak') {
         badge.classList.add('your-turn'); badge.textContent = '🎤 Your Turn';
       } else if (!isP2Turn && (data.phase === 'user_prep' || data.phase === 'user_record')) {
-        badge.classList.add('ai-turn');   badge.textContent = '🤖 Opponent Turn';
+        badge.classList.add('ai-turn');   badge.textContent = '👤 P1\'s Turn';
       } else if (data.phase === 'judging') {
         badge.classList.add('judge-turn'); badge.textContent = '⚖️ Judging…';
       } else { badge.textContent = '–'; }
@@ -3732,21 +3784,44 @@ function applyStateFromP1(data) {
   if (micBtn) {
     const wasDisabled = micBtn.disabled;
     const isMyTurn    = (data.turn === 'ai') && (data.phase === 'ai_speak');
-    micBtn.disabled   = !isMyTurn;
-    // MP-FIX-03: start a 30s turn timer the first time P2's mic is enabled
-    if (isMyTurn && wasDisabled) {
-      stopTurnTimer();
-      M.phase = 'user_prep';  // needed for the timer callback check
-      startTurnTimer(() => {
-        if (M.phase === 'user_prep' || M.phase === 'user_record') {
-          toast('Time\'s up! Turn skipped.');
-          stopVoiceCapture(false);
-          afterUserSpeaks('');  // sends '(skipped)' to P1 via the P2 patch
-        }
-      });
-    } else if (!isMyTurn && !wasDisabled) {
-      stopTurnTimer();  // P2's turn ended — stop the timer
+
+    if (!isMyTurn) {
+      // Not P2's turn — disable mic and reset turn-started guard
+      micBtn.disabled  = true;
+      _p2TurnStarted   = false;
+      if (!wasDisabled) stopTurnTimer();  // P2's turn just ended
+    } else if (isMyTurn && !_p2TurnStarted) {
+      // Bug-06: P2's turn just started — play P1's TTS first, then open mic
+      _p2TurnStarted = true;
+      _p2StmtSent    = false;  // Bug-04 reset (also reset in the guard itself)
+      micBtn.disabled = true;  // keep disabled until TTS finishes
+
+      const p1Text = _p2LastP1Text;
+      _p2LastP1Text = '';  // consume
+
+      const enableMicAndTimer = () => {
+        if (M.phase === 'over' || !mp.active) return;
+        micBtn.disabled = false;
+        M.phase = 'user_prep';
+        stopTurnTimer();
+        startTurnTimer(() => {
+          if (M.phase === 'user_prep' || M.phase === 'user_record') {
+            toast('Time\'s up! Turn skipped.');
+            stopVoiceCapture(false);
+            afterUserSpeaks('');
+          }
+        });
+      };
+
+      if (p1Text && p1Text !== '(skipped)' && S.apiKey) {
+        // Play P1's statement via TTS, then unlock mic
+        setMatchStatus('Opponent is speaking\u2026', 'speaking');
+        speak(p1Text).then(enableMicAndTimer).catch(enableMicAndTimer);
+      } else {
+        enableMicAndTimer();
+      }
     }
+    // else: _p2TurnStarted=true and still my turn — do nothing (timer already running)
   }
 }
 
@@ -3755,18 +3830,45 @@ function applyStateFromP1(data) {
 const _baseAfterUserSpeaks = null; // placeholder — see patch below
 
 // ── Handle P2's statement on P1 ─────────────────────────────
-function handleP2Statement(text) {
+async function handleP2Statement(text) {
+  // Guard: ignore if we already have a statement for this exchange
+  if (S.exchanges[M.exchangeNum]?.aiText) return;
+
   // On P1: P2's statement is the "AI/opponent" side in the exchange
-  setCardText('ai', esc(text).replace(/\n/g,'<br>'));
-  setCardBadge('ai', 'done');
+  setCardText('ai', text && text !== '(skipped)'
+    ? esc(text).replace(/\n/g,'<br>')
+    : '<span class="placeholder" style="color:#f08080">\u23f1 Opponent skipped turn</span>');
   if (!S.exchanges[M.exchangeNum]) S.exchanges[M.exchangeNum] = {};
   S.exchanges[M.exchangeNum].aiText      = text;
-  S.exchanges[M.exchangeNum].aiSpeakDone = true;  // P2 typed, no TTS
+  S.exchanges[M.exchangeNum].aiSpeakDone = false;
   stopTurnTimer();
-  // Use the same text-based judge trigger as solo mode
-  checkAndJudge();
-  // If user hasn't spoken yet (P2 made opening statement) → start P1's turn
-  if (!S.exchanges[M.exchangeNum].userText) {
+
+  // Bug-06: play P2's statement via TTS on P1's device (mirrors callOpponent's TTS flow)
+  if (text && text !== '(skipped)' && S.apiKey) {
+    setCardBadge('ai', 'speaking');
+    setMatchStatus('Opponent is speaking\u2026', 'speaking');
+    M.aiSpeaking = true;
+    // Text-based judge: fires immediately if userText already exists; deferred by M.aiSpeaking
+    checkAndJudge();
+    await speak(text);
+    M.aiSpeaking = false;
+    setCardBadge('ai', 'done');
+    // If judge resolved while TTS was playing, advance now
+    if (M.pendingNextTurn && M.phase !== 'over') {
+      M.pendingNextTurn = false;
+      setTimeout(() => { if (M.phase !== 'over') handleKnockoutLogic(); }, 200);
+      return;
+    }
+  } else {
+    setCardBadge('ai', 'done');
+    checkAndJudge();
+  }
+
+  S.exchanges[M.exchangeNum].aiSpeakDone = true;
+
+  // Opening statement case: P2 spoke first, user hasn't spoken yet
+  const ex = S.exchanges[M.exchangeNum];
+  if (ex && !ex.userText && !ex.judgeTriggered && M.phase !== 'over') {
     runTurn('user');
   }
 }
@@ -3918,9 +4020,12 @@ document.querySelectorAll('.rps-btn').forEach(btn => {
 });
 
 // ── Patch: afterUserSpeaks — route P2's statement to P1 ──────
+let _p2StmtSent = false;  // Bug-04: guard against timer-path + onstop both firing
 const _soloAfterUserSpeaks = afterUserSpeaks;
 afterUserSpeaks = function(transcript) {
   if (mp.active && mp.role === 'p2') {
+    if (_p2StmtSent) return;   // already sent this turn — ignore second call
+    _p2StmtSent = true;
     stopTurnTimer();  // stop P2's own timer
     // MP-FIX-04: send '(skipped)' on empty so judge fires on P1
     const sendText = transcript || '(skipped)';
@@ -3935,6 +4040,10 @@ afterUserSpeaks = function(transcript) {
     setMatchStatus('Statement sent. Waiting for judge…', '');
     document.getElementById('micBtn').disabled = true;
     return;
+  }
+  // P1 in multiplayer: notify P2 so they can play TTS of P1's statement
+  if (mp.active && mp.role === 'p1' && transcript && transcript !== '(skipped)') {
+    try { mp.conn.send({ type: 'p1_spoke', text: transcript }); } catch(_){}
   }
   // Solo / P1: use normal flow
   _soloAfterUserSpeaks(transcript);
@@ -3987,7 +4096,10 @@ function buildTranscript() {
     list.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:12px;padding:16px">No exchanges recorded.</div>';
     return;
   }
-  const oppLabel = (mp.active && mp.role) ? '👤 Opponent' : '🤖 AI';
+  const oppLabel  = mp.active ? (mp.role === 'p1' ? '👤 P2' : '👤 P1') : '🤖 AI';
+  const selfLabel  = mp.active ? (mp.role === 'p1' ? '🎤 P1 (You)' : '🎤 P2 (You)') : '🎤 You';
+  const oppSideLabel = mp.active ? (mp.role === 'p1' ? 'P2' : 'P1') : 'AI';
+  const mySideLabel  = mp.active ? (mp.role === 'p1' ? 'P1' : 'P2') : 'You';
   S.exchanges.forEach((ex, i) => {
     const div = document.createElement('div');
     div.className = 'pm-exchange';
@@ -3997,9 +4109,10 @@ function buildTranscript() {
       : '—';
     // Mini star gauge
     const starPct   = ex.starPos !== undefined ? Math.round(ex.starPos * 100) : null;
+    const miniGaugeLabel = starPct === null ? '' : starPct < 50 ? `${mySideLabel} side` : starPct > 50 ? `${oppSideLabel} side` : 'Center';
     const miniGauge = starPct !== null
       ? `<div class="pm-mini-gauge-wrap">
-           <div class="pm-mini-gauge-label">⭐ Star — ${starPct < 50 ? 'Your side' : starPct > 50 ? (mp.active ? 'Opponent side' : 'AI side') : 'Center'}</div>
+           <div class="pm-mini-gauge-label">⭐ Star — ${miniGaugeLabel}</div>
            <div class="pm-mini-gauge-bg">
              <span class="pm-mini-gauge-star" style="left:${starPct}%">⭐</span>
            </div>
@@ -4011,7 +4124,7 @@ function buildTranscript() {
          ${ex.judgeDelta ? `<span class="ex-delta ${winnerCls}">${esc(deltaLabel)}</span>` : ''}
        </div>
        ${ex.aiText   ? `<div class="pm-stmt ai-stmt"><div class="stmt-who">${oppLabel}</div>${esc(ex.aiText).replace(/\n/g,'<br>')}</div>`   : ''}
-       ${ex.userText ? `<div class="pm-stmt user-stmt"><div class="stmt-who">🎤 You</div>${esc(ex.userText).replace(/\n/g,'<br>')}</div>` : ''}
+       ${ex.userText ? `<div class="pm-stmt user-stmt"><div class="stmt-who">${selfLabel}</div>${esc(ex.userText).replace(/\n/g,'<br>')}</div>` : ''}
        ${ex.judgeReason ? `<div class="pm-judge-note"><strong>⚖️ Judge:</strong> ${esc(ex.judgeReason)}</div>` : ''}
        ${miniGauge}`;
     list.appendChild(div);
@@ -4028,6 +4141,30 @@ function triggerScorecardBars() {
 }
 
 function rematchFromPostMatch() {
+  if (mp.active) {
+    // Notify the other device so both go to RPS simultaneously
+    try { mp.conn.send({ type: 'rematch' }); } catch(_){}
+    doRematch();
+  } else {
+    rpsStart();
+    showScreen('screen-rps');
+  }
+}
+
+// Shared rematch logic — resets exchange state then returns to RPS
+function doRematch() {
+  S.matchResult = null;
+  S.exchanges   = [];
+  S.userSide    = ''; S.aiSide = '';
+  S.forStance   = ''; S.againstStance = '';
+  M.exchangeNum = 0;
+  M.koCount     = 0; M.koAttacker = null;
+  M.aiSpeaking  = false; M.pendingNextTurn = false;
+  if (mp.active) {
+    mp._p1RpsPick = null; mp._p2RpsPick = null;
+    mp.mySeq = 0; mp.p2Seq = 0;
+    _p2StmtSent = false;
+  }
   rpsStart();
   showScreen('screen-rps');
 }
@@ -4037,8 +4174,10 @@ function rematchFromPostMatch() {
 // ═══════════════════════════════════════════════════════════
 async function callBreakdown(exchanges) {
   if (!S.apiKey || !exchanges.length) return;
+  const p1Label = mp.active ? 'P1' : 'User';
+  const p2Label = mp.active ? 'P2' : 'AI';
   const transcript = exchanges.map((ex, i) =>
-    `Exchange ${i+1}:\nAI: ${ex.aiText||'(skipped)'}\nUser: ${ex.userText||'(skipped)'}`
+    `Exchange ${i+1}:\n${p1Label}: ${ex.userText||'(skipped)'}\n${p2Label}: ${ex.aiText||'(skipped)'}`
   ).join('\n\n');
 
   const systemPrompt =
