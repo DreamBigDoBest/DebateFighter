@@ -887,7 +887,14 @@ header{
 
 
 /* ──────────────────────────────────────────────────────────── */
-/*  MULTIPLAYER LOBBY OVERLAY  (IMPROVE-02)                   */
+/* Lobby topic preview banner */
+.lobby-topic-preview{
+  font-size:11px;color:var(--gold);font-weight:700;
+  background:rgba(245,197,66,.08);border:1px solid rgba(245,197,66,.22);
+  border-radius:8px;padding:6px 12px;text-align:center;
+  word-break:break-word;line-height:1.5;margin-bottom:8px;
+}
+.lobby-topic-preview:empty{display:none}
 /* ──────────────────────────────────────────────────────────── */
 #mpLobby{
   display:none;position:fixed;inset:0;z-index:500;
@@ -1495,6 +1502,7 @@ header{
 
     <!-- View: home -->
     <div class="lv active" id="lv-home">
+      <div class="lobby-topic-preview" id="lobbyTopicPreview"></div>
       <button class="lobby-btn lbtn-gold"   onclick="lobbyShowCreate()">⚔️ Create Room</button>
       <button class="lobby-btn lbtn-purple" onclick="lobbyShowJoin()">🔗 Join Room</button>
       <button class="lobby-btn lbtn-gray"   onclick="lobbyClose()">← Cancel</button>
@@ -1502,6 +1510,7 @@ header{
 
     <!-- View: create -->
     <div class="lv" id="lv-create">
+      <div class="lobby-topic-preview" id="lobbyTopicPreview2"></div>
       <input class="lobby-input" id="inp-create" maxlength="12"
         placeholder="ROOM NAME" autocomplete="off" spellcheck="false">
       <button class="lobby-btn lbtn-gold" onclick="doCreateRoom()">Create &amp; Wait</button>
@@ -1522,6 +1531,7 @@ header{
     <div class="lv" id="lv-waiting">
       <div class="lobby-status" id="waiting-status">Waiting for opponent…</div>
       <div class="lobby-code-display" id="disp-code"></div>
+      <div class="lobby-topic-preview" id="lobbyTopicPreview3"></div>
       <div class="lobby-hint">Share this room name with your opponent.<br>They enter it under Join Room.</div>
       <button class="lobby-btn lbtn-gray" onclick="lobbyBack()">← Cancel</button>
     </div>
@@ -1529,6 +1539,7 @@ header{
     <!-- View: connecting (P2 dials P1) -->
     <div class="lv" id="lv-connecting">
       <div class="lobby-status" id="connecting-status">Connecting…</div>
+      <div class="lobby-topic-preview" id="lobbyTopicPreview4" style="display:none"></div>
       <button class="lobby-btn lbtn-gray" onclick="lobbyBack()">← Cancel</button>
     </div>
   </div>
@@ -2622,6 +2633,10 @@ async function generateStanceLabels() {
       S.forStance     = result.for;
       S.againstStance = result.against;
       setStanceUI();
+      // MP-05: push labels to P2 as soon as they arrive
+      if (mp.active && mp.role === 'p1' && mp.conn) {
+        try { mp.conn.send({ type:'stance', forStance: S.forStance, againstStance: S.againstStance }); } catch(_){}
+      }
     }
   } catch { /* silent — placeholder text remains */ }
 }
@@ -2684,7 +2699,12 @@ function mpMatchInit_P2() {
   M.koAttacker    = null;
   M.exchangeNum   = 0;
   M.phase         = 'idle';
+  M.aiSpeaking    = false;
+  M.pendingNextTurn = false;
   S.exchanges     = [];
+  // MP-FIX-05: reset side assignments so applyStateFromP1 re-applies them
+  S.userSide = ''; S.aiSide = '';
+  S.forStance = ''; S.againstStance = '';
   setStarPos(0.5);
   updateKoUI();
   updateTurnTimerUI();
@@ -2786,24 +2806,30 @@ function runTurn(speaker) {
     });
 
   } else {
-    // AI turn
-    setTurnBanner('🤖 AI\'s TURN — Generating response…', 'ai-turn');
-    setCardBadge('ai', 'processing');
-    setMatchStatus('AI is crafting a response…', 'processing');
+    // AI / Opponent turn
     document.getElementById('micBtn').disabled = true;
-    // BUG-05 fix: do NOT run turn timer for AI — GPT has no fixed 30s limit
-    // and showing a red "expired" bar while waiting for the API is misleading.
     updateTurnTimerUI(); // reset bar to full green
 
-    // Call AI opponent (TODO-10 will wire GPT; for now placeholder)
-    if (typeof callOpponent === 'function') {
-      const lastUserText = S.exchanges.length
-        ? S.exchanges[S.exchanges.length - 1].userText || ''
-        : '';
-      callOpponent(lastUserText);
+    if (mp.active && mp.role === 'p1') {
+      // MULTIPLAYER: P2 is the human opponent — wait for their statement via PeerJS
+      setTurnBanner('⏳ Opponent\'s TURN — Waiting…', 'ai-turn');
+      setCardBadge('ai', 'wait');
+      setMatchStatus('Waiting for opponent to speak…', '');
+      // P2's 30s timer is handled on P2's device (MP-FIX-03)
+      // No callOpponent — P2's statement arrives via handleP2Statement()
     } else {
-      // Stub: simulate AI response
-      setTimeout(() => afterAiSpeaks('[AI response pending — TODO-10]'), 1200);
+      // SOLO: call the AI API
+      setTurnBanner('🤖 AI\'s TURN — Generating response…', 'ai-turn');
+      setCardBadge('ai', 'processing');
+      setMatchStatus('AI is crafting a response…', 'processing');
+      if (typeof callOpponent === 'function') {
+        const lastUserText = S.exchanges.length
+          ? S.exchanges[S.exchanges.length - 1].userText || ''
+          : '';
+        callOpponent(lastUserText);
+      } else {
+        setTimeout(() => afterAiSpeaks('[AI response pending — TODO-10]'), 1200);
+      }
     }
   }
 }
@@ -3423,6 +3449,12 @@ const mp = {
 
 // ── Lobby UI helpers ─────────────────────────────────────────
 function lobbyOpen() {
+  // Populate topic preview in all lobby views
+  const topicText = S.topic ? `🗨️ ${S.topic}` : '⚠️ No topic selected — go back and pick one';
+  ['lobbyTopicPreview','lobbyTopicPreview2','lobbyTopicPreview3'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = topicText;
+  });
   lobbyShowView('lv-home');
   document.getElementById('mpLobby').classList.add('visible');
 }
@@ -3451,8 +3483,13 @@ function lobbyCancel() {
 function doCreateRoom() {
   const raw   = document.getElementById('inp-create').value.trim().toUpperCase();
   const errEl = document.getElementById('err-create');
+  if (!S.topic) { errEl.textContent = 'Please select a topic first before creating a room.'; return; }
   if (!raw) { errEl.textContent = 'Please enter a room name.'; return; }
   errEl.textContent = '';
+
+  // Update waiting view topic preview
+  const wtp = document.getElementById('lobbyTopicPreview3');
+  if (wtp) wtp.textContent = `🗨️ ${S.topic}`;
 
   const peerId = PEER_PREFIX + raw;
   mp.roomCode  = raw;
@@ -3525,7 +3562,7 @@ function onBothConnected_P1(conn) {
   setTimeout(() => {
     conn.send({ type: 'settings', topic: S.topic, persona: S.persona,
       tone: S.tone, language: S.language, difficulty: S.difficulty,
-      voice: S.voice, coaching: S.coaching });
+      voice: S.voice, coaching: S.coaching, mode: S.mode });
     showScreen('screen-rps');
   }, 600);
 }
@@ -3555,10 +3592,15 @@ function receiveFromP2(data) {
 // ── Receive data from P1 (runs on P2) ───────────────────────
 function receiveFromP1(data) {
   if (data.type === 'settings') {
-    // Apply P1's settings
+    // Apply P1's settings — P2 uses P1's topic, language, difficulty etc.
     S.topic = data.topic; S.persona = data.persona; S.tone = data.tone;
     S.language = data.language; S.difficulty = data.difficulty;
     S.voice = data.voice; S.coaching = data.coaching;
+    if (data.mode) S.mode = data.mode;
+    // Show the topic on P2's connecting screen
+    const el = document.getElementById('lobbyTopicPreview4');
+    if (el) { el.textContent = `🗨️ ${S.topic}`; el.style.display = ''; }
+    document.getElementById('connecting-status').textContent = `Topic: ready! Starting RPS…`;
     showScreen('screen-rps');
   } else if (data.type === 'rps_result') {
     // P1 resolved RPS → show result on P2 screen
@@ -3566,6 +3608,9 @@ function receiveFromP1(data) {
   } else if (data.type === 'state') {
     // P1 authoritative state broadcast
     applyStateFromP1(data);
+  } else if (data.type === 'stance') {
+    S.forStance = data.forStance; S.againstStance = data.againstStance;
+    setStanceUI();
   } else if (data.type === 'match_start') {
     // P2 does UI-only init — no timer, no runTurn (P1 drives all game logic)
     mpMatchInit_P2();
@@ -3591,6 +3636,11 @@ function broadcastState() {
     turnBanner:  document.getElementById('turnBanner')?.textContent || '',
     turnBannerCls: document.getElementById('turnBanner')?.className || '',
     matchResult: S.matchResult || null,
+    userSide:    S.userSide,   // P2 needs to know which 方 it is
+    aiSide:      S.aiSide,
+    forStance:   S.forStance,
+    againstStance: S.againstStance,
+    exchanges:   S.matchResult ? S.exchanges : undefined, // only send with matchResult
   });
 }
 
@@ -3607,29 +3657,52 @@ function applyStateFromP1(data) {
     M.turnTimerSecs = data.turnTimerSecs;
     updateTurnTimerUI();
   }
-  // Update turn banner + bottom-bar badge (BUG-03 fix)
+  // Update turn banner + bottom-bar badge
   if (data.turnBanner) {
     const tb = document.getElementById('turnBanner');
     if (tb) { tb.textContent = data.turnBanner; tb.className = data.turnBannerCls || 'turn-banner'; }
     // Sync mbbTurnBadge for P2
+    // In P1's model: 'user' = P1, 'ai' = P2.
+    // So when data.turn==='ai' it is P2's (our) turn.
+    const isP2Turn = (data.turn === 'ai');
     const badge = document.getElementById('mbbTurnBadge');
     if (badge) {
-      const cls = data.turnBannerCls || '';
       badge.className = 'mbb-turn-badge';
-      if      (cls.includes('user-turn'))  { badge.classList.add('your-turn');  badge.textContent = '🎤 Your Turn'; }
-      else if (cls.includes('ai-turn'))    { badge.classList.add('ai-turn');    badge.textContent = '🤖 AI Turn'; }
-      else if (cls.includes('judge-turn')) { badge.classList.add('judge-turn'); badge.textContent = '⚖️ Judging…'; }
-      else { badge.textContent = '–'; }
+      if (isP2Turn && data.phase === 'ai_speak') {
+        badge.classList.add('your-turn'); badge.textContent = '🎤 Your Turn';
+      } else if (!isP2Turn && (data.phase === 'user_prep' || data.phase === 'user_record')) {
+        badge.classList.add('ai-turn');   badge.textContent = '🤖 Opponent Turn';
+      } else if (data.phase === 'judging') {
+        badge.classList.add('judge-turn'); badge.textContent = '⚖️ Judging…';
+      } else { badge.textContent = '–'; }
     }
   }
-  // Update cards
-  if (data.aiText)   { const el = document.getElementById('aiText');   if (el) el.innerHTML = data.aiText; }
-  if (data.userText) { const el = document.getElementById('userText'); if (el) el.innerHTML = data.userText; }
+  // Update cards — P1 calls P2 "ai" and itself "user", so swap for P2's view
+  // P2 sees: their own statement in "You" card, P1's statement in "Opponent" card
+  if (data.aiText !== undefined) {
+    const el = document.getElementById('userText');  // P2's own = P1's "ai"
+    if (el) el.innerHTML = data.aiText;
+  }
+  if (data.userText !== undefined) {
+    const el = document.getElementById('aiText');    // P1's = P2's "opponent"
+    if (el) el.innerHTML = data.userText;
+  }
   if (data.judgeReason) {
     const el = document.getElementById('judgeReason');
     const strip = document.getElementById('judgeStrip');
     if (el) el.textContent = data.judgeReason;
     if (strip && data.judgeReason) strip.style.display = '';
+  }
+  // Stance labels (MP-05) + P2 side assignment
+  if (data.forStance && data.againstStance) {
+    S.forStance = data.forStance; S.againstStance = data.againstStance;
+    setStanceUI();
+  }
+  if (data.userSide && data.aiSide && !S.userSide) {
+    // P2's own side = data.aiSide (P1 calls P2 the 'ai' slot)
+    S.userSide = data.aiSide;
+    S.aiSide   = data.userSide;
+    _initStancePlaceholders();
   }
   // KO indicator
   if (data.koCount !== undefined) { M.koCount = data.koCount; updateKoUI(); }
@@ -3637,6 +3710,15 @@ function applyStateFromP1(data) {
   if (data.matchResult && M.phase !== 'over') {
     M.phase     = 'over';
     S.matchResult = data.matchResult;
+    // MP-FIX-06: restore exchanges for P2's post-match transcript
+    if (data.exchanges && Array.isArray(data.exchanges)) {
+      // Swap userText/aiText back to P2's perspective
+      S.exchanges = data.exchanges.map(ex => ({
+        ...ex,
+        userText: ex.aiText,   // P2's own statement (P1 calls P2 "ai")
+        aiText:   ex.userText, // P1's statement (P1 calls itself "user")
+      }));
+    }
     clearInterval(M.gameTimerInt);
     stopTurnTimer();
     setTimeout(() => {
@@ -3644,14 +3726,27 @@ function applyStateFromP1(data) {
       if (typeof postMatchStart === 'function') postMatchStart();
     }, 600);
   }
-  // Mic enable/disable for P2's turns
-  // applyStateFromP1 only runs on P2 (P1 controls its own mic directly in runTurn)
-  // From P1's perspective P2 is the 'ai', so P2's speaking turn = data.turn === 'ai'
+  // Mic enable/disable for P2
+  // In P1's model 'ai' = P2, so P2's speaking turn is when data.turn === 'ai' and phase is ai_speak
   const micBtn = document.getElementById('micBtn');
   if (micBtn) {
-    const isMyTurn  = (data.turn === 'ai');
-    const canRecord = isMyTurn && (data.phase === 'ai_speak' || data.phase === 'user_prep');
-    micBtn.disabled = !canRecord;
+    const wasDisabled = micBtn.disabled;
+    const isMyTurn    = (data.turn === 'ai') && (data.phase === 'ai_speak');
+    micBtn.disabled   = !isMyTurn;
+    // MP-FIX-03: start a 30s turn timer the first time P2's mic is enabled
+    if (isMyTurn && wasDisabled) {
+      stopTurnTimer();
+      M.phase = 'user_prep';  // needed for the timer callback check
+      startTurnTimer(() => {
+        if (M.phase === 'user_prep' || M.phase === 'user_record') {
+          toast('Time\'s up! Turn skipped.');
+          stopVoiceCapture(false);
+          afterUserSpeaks('');  // sends '(skipped)' to P1 via the P2 patch
+        }
+      });
+    } else if (!isMyTurn && !wasDisabled) {
+      stopTurnTimer();  // P2's turn ended — stop the timer
+    }
   }
 }
 
@@ -3661,27 +3756,18 @@ const _baseAfterUserSpeaks = null; // placeholder — see patch below
 
 // ── Handle P2's statement on P1 ─────────────────────────────
 function handleP2Statement(text) {
-  // On P1: P2's statement is the "AI" side in the exchange from P1's perspective
+  // On P1: P2's statement is the "AI/opponent" side in the exchange
   setCardText('ai', esc(text).replace(/\n/g,'<br>'));
   setCardBadge('ai', 'done');
   if (!S.exchanges[M.exchangeNum]) S.exchanges[M.exchangeNum] = {};
-  S.exchanges[M.exchangeNum].aiText = text;
+  S.exchanges[M.exchangeNum].aiText      = text;
+  S.exchanges[M.exchangeNum].aiSpeakDone = true;  // P2 typed, no TTS
   stopTurnTimer();
-
-  // Mirror the BUG-01 fix: if P2 (ai) opened the debate, P1 hasn't spoken yet
-  if (S.firstSpeaker === 'ai' && M.exchangeNum === 0) {
-    // P2 made the opening statement — now P1 responds
+  // Use the same text-based judge trigger as solo mode
+  checkAndJudge();
+  // If user hasn't spoken yet (P2 made opening statement) → start P1's turn
+  if (!S.exchanges[M.exchangeNum].userText) {
     runTurn('user');
-  } else {
-    // Both sides have spoken → judge the exchange
-    if (typeof callJudge === 'function') {
-      setTurnBanner('⚖️ JUDGE EVALUATING…', 'judge-turn');
-      setMatchStatus('Judge is evaluating the exchange…', 'processing');
-      callJudge(
-        S.exchanges[M.exchangeNum].userText || '',
-        S.exchanges[M.exchangeNum].aiText   || ''
-      );
-    }
   }
 }
 
@@ -3754,9 +3840,14 @@ function showRPSResult_local(myPick, oppPick, first, myRole) {
   } else {
     const iSpeak = (first === myRole);
     S.firstSpeaker = iSpeak ? 'user' : 'ai';
-    resultEl.textContent = iSpeak ? '🎉 You win! You speak first.' : '💀 Opponent wins! They speak first.';
+    // Assign 正方/反方 — first speaker is 正方 (same as solo RPS)
+    S.userSide = iSpeak ? '正方' : '反方';
+    S.aiSide   = iSpeak ? '反方' : '正方';
+    resultEl.textContent = iSpeak
+      ? `🎉 You win! You are 正方 (FOR the proposition).`
+      : `💀 Opponent wins! You are 反方 (AGAINST the proposition).`;
     resultEl.className   = `rps-result visible ${iSpeak ? 'win' : 'lose'}`;
-    document.getElementById('rpsPhaseLabel').textContent = iSpeak ? 'You go first!' : 'Opponent goes first!';
+    document.getElementById('rpsPhaseLabel').textContent = iSpeak ? 'You go first! (正方)' : 'Opponent goes first! (正方)';
     setTimeout(() => {
       showScreen('screen-match');
       if (mp.role === 'p1') {
@@ -3830,10 +3921,16 @@ document.querySelectorAll('.rps-btn').forEach(btn => {
 const _soloAfterUserSpeaks = afterUserSpeaks;
 afterUserSpeaks = function(transcript) {
   if (mp.active && mp.role === 'p2') {
-    // P2: send transcript to P1 and wait for state updates
+    stopTurnTimer();  // stop P2's own timer
+    // MP-FIX-04: send '(skipped)' on empty so judge fires on P1
+    const sendText = transcript || '(skipped)';
     mp.mySeq++;
-    mp.conn.send({ type: 'statement', text: transcript, seq: mp.mySeq });
-    setCardText('user', esc(transcript).replace(/\n/g,'<br>'));
+    mp.conn.send({ type: 'statement', text: sendText, seq: mp.mySeq });
+    if (transcript) {
+      setCardText('user', esc(transcript).replace(/\n/g,'<br>'));
+    } else {
+      setCardText('user', '<span class="placeholder" style="color:#f08080">⏱ Turn skipped — no statement given</span>');
+    }
     setCardBadge('user', 'done');
     setMatchStatus('Statement sent. Waiting for judge…', '');
     document.getElementById('micBtn').disabled = true;
