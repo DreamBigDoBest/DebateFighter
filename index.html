@@ -1,0 +1,4019 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#06080f">
+<title>Debate Fighter</title>
+<!-- PeerJS: zero-config P2P WebRTC — no account or server needed -->
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+/* ── Reset ─────────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+/* ── CSS Variables ─────────────────────────────────────────── */
+:root{
+  --bg:       #06080f;
+  --bg2:      #090c17;
+  --surface:  #0f1420;
+  --surface2: #151c2e;
+  --border:   rgba(255,255,255,.07);
+  --border2:  rgba(255,255,255,.13);
+  --text:     #dce3f2;
+  --text2:    #96a4bf;
+  --muted:    #4e5d7a;
+  --hdr:      54px;
+
+  /* Accent palette */
+  --gold:        #f5c542;
+  --gold-bg:     rgba(245,197,66,.10);
+  --gold-border: rgba(245,197,66,.30);
+  --gold-glow:   rgba(245,197,66,.20);
+
+  --user:        #4f8ef7;
+  --user-bg:     rgba(79,142,247,.10);
+  --user-border: rgba(79,142,247,.30);
+  --user-glow:   rgba(79,142,247,.20);
+
+  --ai:          #f05252;
+  --ai-bg:       rgba(240,82,82,.10);
+  --ai-border:   rgba(240,82,82,.30);
+  --ai-glow:     rgba(240,82,82,.20);
+
+  --green:       #1fc990;
+  --green-bg:    rgba(31,201,144,.10);
+  --green-border:rgba(31,201,144,.28);
+  --green-glow:  rgba(31,201,144,.18);
+
+  --purple:      #b46ef7;
+  --purple-bg:   rgba(180,110,247,.10);
+  --purple-border:rgba(180,110,247,.28);
+  --purple-glow: rgba(180,110,247,.18);
+}
+
+/* ── Base ──────────────────────────────────────────────────── */
+html{height:100%;-webkit-text-size-adjust:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  -webkit-tap-highlight-color:transparent;
+  display:flex;
+  flex-direction:column;
+  height:100svh;
+  height:-webkit-fill-available;
+  overflow:hidden;
+  position:relative;
+}
+
+/* ── Ambient background glow ───────────────────────────────── */
+body::before{
+  content:'';
+  position:fixed;inset:0;
+  pointer-events:none;z-index:0;
+  background:
+    radial-gradient(ellipse 60% 40% at 15% 20%, rgba(79,142,247,.06),  transparent),
+    radial-gradient(ellipse 50% 35% at 85% 15%, rgba(180,110,247,.05), transparent),
+    radial-gradient(ellipse 55% 40% at 50% 90%, rgba(240,82,82,.05),   transparent),
+    radial-gradient(ellipse 45% 30% at 50% 50%, rgba(245,197,66,.03),  transparent);
+}
+/* Dot grid */
+body::after{
+  content:'';
+  position:fixed;inset:0;
+  pointer-events:none;z-index:0;
+  background-image:radial-gradient(rgba(255,255,255,.025) 1px, transparent 1px);
+  background-size:28px 28px;
+}
+
+/* ── Header ────────────────────────────────────────────────── */
+header{
+  height:var(--hdr);
+  flex-shrink:0;
+  position:relative;z-index:20;
+  background:rgba(6,8,15,.94);
+  backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);
+  border-bottom:1px solid var(--border2);
+  display:flex;align-items:center;
+  padding:0 14px;gap:10px;
+}
+.logo{
+  width:36px;height:36px;
+  border-radius:10px;
+  flex-shrink:0;
+  background:linear-gradient(140deg,#f5c542 0%,#f05252 50%,#4f8ef7 100%);
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px;
+  box-shadow:0 2px 16px rgba(245,197,66,.30);
+}
+.hdr-info{flex:1;min-width:0}
+.hdr-title{
+  font-size:15px;font-weight:900;letter-spacing:-.2px;
+  background:linear-gradient(90deg,#f5c542 0%,#f08052 40%,#b46ef7 80%,#4f8ef7 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.hdr-sub{
+  font-size:9px;color:var(--muted);
+  letter-spacing:.7px;text-transform:uppercase;margin-top:1px;
+}
+#apiDot{
+  width:7px;height:7px;border-radius:50%;
+  background:#f05252;flex-shrink:0;
+  transition:background .3s;
+}
+#apiDot.ok{background:#1fc990}
+#apiToggleBtn{
+  padding:5px 11px;
+  border:1px solid var(--border2);
+  border-radius:18px;
+  background:rgba(255,255,255,.055);
+  color:var(--text2);
+  font-size:11px;font-weight:600;
+  cursor:pointer;
+  display:flex;align-items:center;gap:4px;
+  touch-action:manipulation;
+  white-space:nowrap;
+  transition:background .18s;
+}
+#apiToggleBtn:active{background:rgba(255,255,255,.1)}
+
+/* ── API Key Drawer ────────────────────────────────────────── */
+#apiDrawer{
+  position:relative;z-index:20;
+  flex-shrink:0;
+  background:rgba(6,8,15,.97);
+  border-bottom:1px solid var(--border2);
+  padding:9px 13px;
+  display:flex;gap:8px;
+}
+#apiDrawer.hidden{display:none}
+#apiKeyInput{
+  flex:1;padding:9px 12px;
+  border:1px solid var(--border2);border-radius:8px;
+  background:rgba(255,255,255,.055);
+  color:var(--text);font-size:16px;
+  outline:none;-webkit-appearance:none;
+  transition:border-color .2s;
+}
+#apiKeyInput::placeholder{color:rgba(255,255,255,.18)}
+#apiKeyInput:focus{border-color:rgba(79,142,247,.55)}
+#apiSetBtn{
+  padding:9px 16px;
+  background:linear-gradient(135deg,#f5c542,#f08052);
+  color:#111;border:none;border-radius:8px;
+  font-weight:800;font-size:14px;
+  cursor:pointer;white-space:nowrap;
+  touch-action:manipulation;
+  transition:opacity .18s;
+}
+#apiSetBtn:active{opacity:.82}
+
+/* ── Screen Manager ────────────────────────────────────────── */
+.screen{
+  flex:1;
+  display:none;
+  flex-direction:column;
+  overflow:hidden;
+  position:relative;z-index:1;
+}
+.screen.active{display:flex}
+
+/* ── Shared layout utilities ───────────────────────────────── */
+.scroll-y{
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+  scrollbar-width:thin;
+}
+.scroll-y::-webkit-scrollbar{width:3px}
+.scroll-y::-webkit-scrollbar-thumb{background:rgba(255,255,255,.09);border-radius:2px}
+
+.section-label{
+  font-size:9px;font-weight:700;
+  letter-spacing:.8px;text-transform:uppercase;
+  color:var(--muted);
+  display:flex;align-items:center;gap:8px;
+  margin-bottom:6px;
+}
+.section-label::after{
+  content:'';flex:1;height:1px;background:var(--border2);
+}
+
+/* ── Card / Surface ────────────────────────────────────────── */
+.card{
+  background:var(--surface);
+  border:1.5px solid var(--border2);
+  border-radius:13px;
+  padding:12px 14px;
+}
+.card-sm{
+  background:var(--surface);
+  border:1px solid var(--border2);
+  border-radius:10px;
+  padding:9px 12px;
+}
+
+/* ── Primary Button ────────────────────────────────────────── */
+.btn-primary{
+  width:100%;padding:13px;
+  background:linear-gradient(135deg,#f5c542,#f08052);
+  color:#111;border:none;border-radius:12px;
+  font-size:14px;font-weight:900;letter-spacing:.4px;
+  cursor:pointer;touch-action:manipulation;
+  box-shadow:0 4px 20px rgba(245,197,66,.25);
+  transition:opacity .15s,transform .1s;
+  -webkit-appearance:none;
+}
+.btn-primary:active{opacity:.88;transform:scale(.98)}
+.btn-primary:disabled{opacity:.3;cursor:not-allowed;transform:none !important}
+
+/* Ghost button */
+.btn-ghost{
+  padding:9px 18px;
+  border:1px solid var(--border2);border-radius:10px;
+  background:rgba(255,255,255,.055);
+  color:var(--text2);font-size:12px;font-weight:600;
+  cursor:pointer;touch-action:manipulation;
+  transition:background .15s;
+  -webkit-appearance:none;
+}
+.btn-ghost:active{background:rgba(255,255,255,.1)}
+
+/* ── Pill selector (config options) ───────────────────────── */
+.pill-group{display:flex;flex-wrap:wrap;gap:6px}
+.pill{
+  padding:6px 13px;
+  border:1.5px solid var(--border2);border-radius:20px;
+  background:rgba(255,255,255,.04);
+  color:var(--text2);font-size:12px;font-weight:600;
+  cursor:pointer;touch-action:manipulation;
+  transition:all .18s;
+  white-space:nowrap;
+}
+.pill:active{transform:scale(.95)}
+.pill.active{
+  background:var(--gold-bg);
+  border-color:var(--gold-border);
+  color:var(--gold);
+  box-shadow:0 0 12px var(--gold-glow);
+}
+
+/* ── Toast ─────────────────────────────────────────────────── */
+#toast{
+  position:fixed;bottom:72px;left:50%;
+  transform:translateX(-50%) translateY(8px);
+  background:rgba(6,8,15,.97);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  color:var(--text);
+  padding:7px 18px;border-radius:20px;
+  font-size:12.5px;font-weight:500;
+  opacity:0;transition:opacity .22s,transform .22s;
+  pointer-events:none;z-index:600;
+  white-space:nowrap;max-width:88vw;text-align:center;
+  border:1px solid var(--border2);
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── Animations ────────────────────────────────────────────── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn {from{opacity:0}to{opacity:1}}
+@keyframes pulse{0%,100%{opacity:.45;transform:scale(1)}50%{opacity:1;transform:scale(1.5)}}
+@keyframes dotPulse{
+  0%,100%{opacity:.45;transform:scale(1)}
+  50%{opacity:1;transform:scale(1.5)}
+}
+
+/* ──────────────────────────────────────────────────────────── */
+/*  SCREEN: CONFIG  (TODO-03)                                  */
+/* ──────────────────────────────────────────────────────────── */
+#screen-config{padding:14px 14px 80px;gap:14px}
+
+/* Hero strip */
+.cfg-hero{
+  text-align:center;padding:20px 12px 16px;
+}
+.cfg-hero-title{
+  font-size:26px;font-weight:900;letter-spacing:-.5px;
+  background:linear-gradient(90deg,#f5c542 0%,#f08052 45%,#b46ef7 80%,#4f8ef7 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  line-height:1.15;
+}
+.cfg-hero-sub{
+  font-size:12px;color:var(--muted);margin-top:5px;letter-spacing:.3px;
+}
+
+/* Topic card */
+.topic-card{
+  background:var(--surface);
+  border:1.5px solid var(--border2);
+  border-radius:13px;
+  padding:12px 14px;
+}
+.topic-display{
+  font-size:13.5px;font-weight:700;
+  color:var(--text);line-height:1.55;
+  min-height:20px;margin:6px 0 10px;
+  padding:8px 10px;
+  background:var(--surface2);
+  border:1px solid var(--border2);border-radius:8px;
+}
+.topic-display .cat-badge{
+  display:inline-block;
+  font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+  padding:2px 7px;border-radius:10px;margin-right:6px;
+  background:var(--gold-bg);color:var(--gold);
+  border:1px solid var(--gold-border);
+}
+.cat-pills{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.cat-pill{
+  padding:5px 10px;
+  border:1.5px solid var(--border2);border-radius:14px;
+  background:rgba(255,255,255,.04);
+  color:var(--text2);font-size:11px;font-weight:600;
+  cursor:pointer;touch-action:manipulation;
+  transition:all .18s;white-space:nowrap;
+}
+.cat-pill.active{
+  background:var(--purple-bg);
+  border-color:var(--purple-border);
+  color:var(--purple);
+}
+.random-btn{
+  width:100%;margin-top:8px;padding:9px;
+  background:linear-gradient(135deg,rgba(245,197,66,.15),rgba(240,130,82,.15));
+  border:1.5px solid var(--gold-border);
+  border-radius:9px;color:var(--gold);
+  font-size:12px;font-weight:700;
+  cursor:pointer;touch-action:manipulation;
+  transition:background .18s;
+  -webkit-appearance:none;
+}
+.random-btn:active{background:rgba(245,197,66,.25)}
+
+/* ── Topic source tabs (IMPROVE-01) ──────────────────────── */
+.topic-tab-row{
+  display:grid;grid-template-columns:1fr 1fr;gap:0;
+  border:1.5px solid var(--border2);border-radius:10px;
+  overflow:hidden;margin-bottom:10px;
+}
+.topic-tab{
+  padding:8px 6px;text-align:center;cursor:pointer;
+  font-size:11px;font-weight:700;
+  background:rgba(255,255,255,.04);color:var(--muted);
+  border:none;touch-action:manipulation;
+  transition:background .18s,color .18s;
+  -webkit-appearance:none;
+}
+.topic-tab:first-child{border-right:1px solid var(--border2)}
+.topic-tab.active{background:var(--gold-bg);color:var(--gold)}
+
+/* Custom topic pane */
+.topic-custom-pane{display:none;flex-direction:column;gap:8px}
+.topic-custom-pane.visible{display:flex}
+.topic-db-pane{display:none;flex-direction:column;gap:0}
+.topic-db-pane.visible{display:flex}
+
+.custom-topic-input{
+  width:100%;padding:10px 12px;
+  border:1.5px solid var(--border2);border-radius:9px;
+  background:var(--surface2);color:var(--text);
+  font-size:14px;outline:none;
+  -webkit-appearance:none;resize:none;
+  transition:border-color .2s;font-family:inherit;
+}
+.custom-topic-input:focus{border-color:rgba(245,197,66,.5)}
+.custom-topic-input::placeholder{color:var(--muted);font-size:12.5px}
+
+.custom-topic-row{display:flex;gap:8px;align-items:stretch}
+.custom-topic-mic{
+  width:42px;flex-shrink:0;
+  border:1.5px solid var(--green-border);border-radius:9px;
+  background:var(--green-bg);color:var(--green);
+  font-size:18px;cursor:pointer;touch-action:manipulation;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .18s;-webkit-appearance:none;
+}
+.custom-topic-mic:active{transform:scale(.9)}
+.custom-topic-mic.recording{
+  border-color:var(--green);
+  box-shadow:0 0 14px var(--green-glow);
+  animation:micPulse 1.2s ease-in-out infinite;
+}
+.use-topic-btn{
+  flex:1;padding:10px;
+  background:linear-gradient(135deg,#f5c542,#f08052);
+  color:#111;border:none;border-radius:9px;
+  font-size:12px;font-weight:900;
+  cursor:pointer;touch-action:manipulation;
+  transition:opacity .15s;-webkit-appearance:none;
+}
+.use-topic-btn:active{opacity:.85}
+
+
+/* Config rows */
+.cfg-row{display:flex;flex-direction:column;gap:6px}
+.cfg-label{
+  font-size:10px;font-weight:700;letter-spacing:.6px;
+  text-transform:uppercase;color:var(--text2);
+  display:flex;align-items:center;gap:6px;
+}
+.cfg-label-icon{font-size:13px}
+
+/* Mode toggle — two big cards */
+.mode-group{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mode-card{
+  padding:11px 10px;
+  border:1.5px solid var(--border2);border-radius:11px;
+  background:rgba(255,255,255,.04);
+  text-align:center;cursor:pointer;touch-action:manipulation;
+  transition:all .18s;
+}
+.mode-card .mc-icon{font-size:22px;line-height:1;margin-bottom:4px}
+.mode-card .mc-name{font-size:12px;font-weight:800;color:var(--text2)}
+.mode-card .mc-desc{font-size:9.5px;color:var(--muted);margin-top:2px}
+.mode-card.active{
+  background:var(--gold-bg);border-color:var(--gold-border);
+  box-shadow:0 0 16px var(--gold-glow);
+}
+.mode-card.active .mc-name{color:var(--gold)}
+
+/* Start button container */
+.cfg-start-wrap{
+  position:fixed;bottom:0;left:0;right:0;
+  padding:12px 14px 16px;
+  background:linear-gradient(to top,var(--bg) 65%,transparent);
+  z-index:10;
+}
+
+
+/* ──────────────────────────────────────────────────────────── */
+/*  SCREEN: RPS  (TODO-05)                                     */
+/* ──────────────────────────────────────────────────────────── */
+#screen-rps{
+  display:none;flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:0;padding:16px;
+  text-align:center;
+}
+#screen-rps.active{display:flex}
+.rps-header{margin-bottom:6px}
+.rps-title{
+  font-size:20px;font-weight:900;letter-spacing:-.2px;
+  background:linear-gradient(90deg,#f5c542,#f08052,#b46ef7);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.rps-topic{
+  font-size:11.5px;color:var(--text2);
+  margin-top:4px;line-height:1.5;
+  max-width:320px;
+}
+.rps-topic strong{color:var(--text)}
+.rps-phase-label{
+  font-size:10px;font-weight:700;letter-spacing:.8px;
+  text-transform:uppercase;color:var(--muted);
+  margin:12px 0 4px;
+}
+/* Pick buttons */
+.rps-picks{
+  display:flex;gap:16px;justify-content:center;
+  margin:12px 0;
+}
+.rps-btn{
+  width:90px;height:90px;
+  border-radius:22px;
+  border:2px solid var(--border2);
+  background:var(--surface);
+  font-size:40px;line-height:1;
+  cursor:pointer;touch-action:manipulation;
+  display:flex;align-items:center;justify-content:center;
+  transition:transform .15s,border-color .2s,background .2s,box-shadow .2s;
+  position:relative;
+  -webkit-appearance:none;
+}
+.rps-btn:active{transform:scale(.9)}
+.rps-btn:hover{
+  border-color:var(--gold-border);
+  background:var(--gold-bg);
+  box-shadow:0 0 18px var(--gold-glow);
+}
+.rps-btn.selected{
+  border-color:var(--user-border);
+  background:var(--user-bg);
+  box-shadow:0 0 20px var(--user-glow);
+  transform:scale(1.05);
+}
+.rps-btn:disabled{opacity:.28;cursor:not-allowed;transform:none !important}
+
+/* Reveal area */
+.rps-reveal{
+  display:none;flex-direction:row;align-items:center;justify-content:center;
+  gap:18px;margin:10px 0;
+}
+.rps-reveal.visible{display:flex}
+.rps-reveal-side{display:flex;flex-direction:column;align-items:center;gap:4px}
+.rps-reveal-emoji{font-size:52px;line-height:1;filter:drop-shadow(0 0 12px rgba(255,255,255,.15))}
+.rps-reveal-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+.rps-vs{font-size:22px;font-weight:900;color:var(--muted);opacity:.5}
+
+/* Result banner */
+.rps-result{
+  padding:10px 20px;border-radius:14px;
+  font-size:14px;font-weight:800;letter-spacing:.2px;
+  margin:8px 0;min-height:40px;
+  opacity:0;transition:opacity .35s;
+  display:flex;align-items:center;justify-content:center;
+  gap:6px;
+}
+.rps-result.visible{opacity:1}
+.rps-result.win{
+  background:var(--user-bg);border:1.5px solid var(--user-border);
+  color:var(--user);box-shadow:0 0 16px var(--user-glow);
+}
+.rps-result.lose{
+  background:var(--ai-bg);border:1.5px solid var(--ai-border);
+  color:var(--ai);box-shadow:0 0 16px var(--ai-glow);
+}
+.rps-result.tie{
+  background:var(--gold-bg);border:1.5px solid var(--gold-border);
+  color:var(--gold);box-shadow:0 0 16px var(--gold-glow);
+}
+
+@keyframes rpsReveal{
+  0%{transform:scale(.5) rotate(-15deg);opacity:0}
+  60%{transform:scale(1.1) rotate(3deg)}
+  100%{transform:scale(1) rotate(0deg);opacity:1}
+}
+.rps-reveal-emoji.anim{animation:rpsReveal .45s ease forwards}
+
+/* ──────────────────────────────────────────────────────────── */
+/*  SCREEN: MATCH  (TODO-06 + TODO-07)                        */
+/* ──────────────────────────────────────────────────────────── */
+#screen-match{
+  display:none;flex-direction:column;overflow:hidden;
+}
+#screen-match.active{display:flex}
+
+/* ── Match top bar (game timer + topic) ──────────────────── */
+.match-topbar{
+  flex-shrink:0;
+  background:rgba(6,8,15,.92);
+  border-bottom:1px solid var(--border2);
+  padding:8px 14px;
+  display:flex;align-items:center;justify-content:space-between;
+  gap:10px;
+}
+.match-topic-label{
+  flex:1;font-size:11px;color:var(--text2);
+  line-height:1.4;min-width:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.match-topic-label strong{color:var(--text);font-size:10px}
+.game-timer{
+  flex-shrink:0;
+  font-size:16px;font-weight:900;letter-spacing:-.5px;
+  color:var(--gold);font-variant-numeric:tabular-nums;
+  min-width:48px;text-align:right;
+}
+.game-timer.warn{color:var(--ai);animation:timerWarn .5s ease-in-out infinite alternate}
+@keyframes timerWarn{from{opacity:1}to{opacity:.5}}
+
+/* ── Gauge (redesigned) ─────────────────────────────────── */
+.gauge-wrap{
+  flex-shrink:0;
+  padding:10px 14px 8px;
+  background:rgba(6,8,15,.92);
+  border-bottom:1px solid var(--border2);
+}
+/* Score delta chip row */
+.gauge-score-row{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:8px;min-height:24px;
+}
+.gauge-score-chip{
+  display:flex;align-items:center;gap:3px;
+  padding:3px 9px;border-radius:20px;
+  font-size:11px;font-weight:800;
+  transition:opacity .4s;opacity:0;
+}
+.gauge-score-chip.visible{opacity:1}
+.chip-ai  {background:var(--ai-bg);  border:1px solid var(--ai-border);  color:var(--ai)}
+.chip-user{background:var(--user-bg);border:1px solid var(--user-border);color:var(--user)}
+.gauge-hint-text{
+  flex:1;text-align:center;
+  font-size:9px;color:var(--muted);letter-spacing:.3px;padding:0 4px;
+}
+/* Labels below track */
+.gauge-labels{
+  display:flex;justify-content:space-between;align-items:center;
+  font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;
+  margin-top:6px;
+}
+.gauge-label-ai{color:var(--ai)}
+.gauge-label-user{color:var(--user)}
+.gauge-label-center{font-size:9px;color:var(--muted);font-weight:600}
+/* Track — full gradient, no thin border */
+.gauge-track{
+  position:relative;height:26px;border-radius:13px;
+  background:linear-gradient(to right,#f05252 0%,#f08052 28%,#f5c542 50%,#1fc990 100%);
+  overflow:visible;
+  box-shadow:inset 0 2px 8px rgba(0,0,0,.45),0 0 14px rgba(31,201,144,.15);
+}
+.gauge-zone-ai,.gauge-zone-user{display:none}
+.gauge-star{
+  position:absolute;top:50%;
+  transform:translate(-50%,-50%);
+  font-size:28px;line-height:1;
+  transition:left .55s cubic-bezier(.34,1.56,.64,1);
+  filter:drop-shadow(0 0 10px rgba(245,197,66,1)) drop-shadow(0 2px 8px rgba(0,0,0,.6));
+  z-index:2;
+}
+.gauge-center-mark{
+  position:absolute;left:50%;top:0;bottom:0;
+  width:2px;background:rgba(255,255,255,.28);
+  pointer-events:none;border-radius:1px;
+}
+
+/* Knockout indicator */
+.ko-indicator{
+  display:flex;align-items:center;justify-content:center;
+  gap:5px;margin-top:4px;min-height:16px;
+}
+.ko-dot{
+  width:8px;height:8px;border-radius:50%;
+  background:rgba(255,255,255,.12);border:1px solid var(--border2);
+  transition:background .3s,box-shadow .3s;
+}
+.ko-dot.filled{
+  background:var(--ai);border-color:var(--ai-border);
+  box-shadow:0 0 8px var(--ai-glow);
+}
+.ko-label{
+  font-size:9px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.6px;color:var(--ai);
+  animation:pulse .8s ease-in-out infinite;
+}
+
+/* ── Turn banner (hidden — mbbTurnBadge handles display) ─── */
+#turnBanner{display:none!important}
+.turn-banner{
+  flex-shrink:0;
+  padding:7px 14px;
+  text-align:center;
+  font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;
+  transition:background .3s,color .3s;
+}
+.turn-banner.user-turn{
+  background:var(--user-bg);color:var(--user);
+  border-bottom:1px solid var(--user-border);
+}
+.turn-banner.ai-turn{
+  background:var(--ai-bg);color:var(--ai);
+  border-bottom:1px solid var(--ai-border);
+}
+.turn-banner.judge-turn{
+  background:var(--gold-bg);color:var(--gold);
+  border-bottom:1px solid var(--gold-border);
+}
+
+/* ── 30-sec turn timer ──────────────────────────────────── */
+.turn-timer-wrap{
+  flex-shrink:0;padding:4px 14px;
+  background:rgba(6,8,15,.7);
+  border-bottom:1px solid var(--border);
+}
+.turn-timer-bar-bg{
+  height:4px;border-radius:2px;
+  background:var(--surface2);position:relative;overflow:hidden;
+}
+.turn-timer-bar{
+  height:100%;border-radius:2px;
+  background:var(--green);
+  transition:width .25s linear, background .5s;
+  will-change:width;
+}
+.turn-timer-bar.warn{background:var(--gold)}
+.turn-timer-bar.danger{background:var(--ai)}
+.turn-timer-secs{
+  font-size:9px;font-weight:700;color:var(--muted);
+  text-align:right;margin-top:2px;
+  font-variant-numeric:tabular-nums;
+}
+
+/* ── Panels area (two statement cards) ─────────────────── */
+.match-panels{
+  flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  display:flex;flex-direction:column;gap:10px;
+  padding:10px 12px;
+  scrollbar-width:thin;
+}
+.match-panels::-webkit-scrollbar{width:3px}
+.match-panels::-webkit-scrollbar-thumb{background:rgba(255,255,255,.09);border-radius:2px}
+
+.statement-card{
+  border-radius:13px;padding:11px 13px;
+  border:1.5px solid var(--border2);
+  background:var(--surface);
+  transition:border-color .3s,box-shadow .3s;
+}
+.statement-card.user-card{border-color:var(--user-border)}
+.statement-card.ai-card  {border-color:var(--ai-border)}
+.stmt-hdr{
+  display:flex;align-items:center;gap:7px;
+  margin-bottom:7px;
+}
+.stmt-avatar{
+  width:26px;height:26px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;flex-shrink:0;
+}
+.stmt-avatar.user{background:var(--user-bg);border:1px solid var(--user-border)}
+.stmt-avatar.ai  {background:var(--ai-bg);  border:1px solid var(--ai-border)}
+.stmt-name{font-size:11px;font-weight:800;flex:1}
+.stmt-name.user{color:var(--user)}
+.stmt-name.ai  {color:var(--ai)}
+.stmt-badge{
+  font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;
+  padding:2px 8px;border-radius:10px;
+}
+.stmt-badge.recording{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+.stmt-badge.processing{background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-border)}
+.stmt-badge.speaking{background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-border)}
+.stmt-badge.done{background:rgba(255,255,255,.06);color:var(--muted);border:1px solid var(--border2)}
+.stmt-text{
+  font-size:13.5px;line-height:1.7;color:var(--text);
+  word-break:break-word;min-height:20px;
+}
+.stmt-text .placeholder{color:var(--muted);font-style:italic;font-size:12px}
+/* Stance label — shows what position each debater is defending */
+.stmt-stance{
+  font-size:10px;font-weight:700;line-height:1.4;
+  padding:3px 9px;border-radius:6px;margin-bottom:6px;
+  display:none;  /* hidden until generateStanceLabels fills it */
+}
+.stmt-stance.for    {background:rgba(31,201,144,.12);color:#1fc990;border:1px solid rgba(31,201,144,.28)}
+.stmt-stance.against{background:rgba(240,82, 82,.12);color:#f08080;border:1px solid rgba(240,82, 82,.28)}
+/* Typing dots */
+.typing-dots{display:inline-flex;align-items:center;gap:4px;vertical-align:middle}
+.typing-dots span{
+  display:inline-block;width:5px;height:5px;border-radius:50%;
+  animation:tdBounce .8s ease-in-out infinite;
+}
+.typing-dots span:nth-child(2){animation-delay:.15s}
+.typing-dots span:nth-child(3){animation-delay:.3s}
+@keyframes tdBounce{0%,60%,100%{transform:translateY(0);opacity:.3}30%{transform:translateY(-5px);opacity:1}}
+
+/* Judge reason strip */
+.judge-strip{
+  margin-top:7px;padding:7px 10px;
+  background:var(--surface2);border-radius:8px;
+  border:1px solid var(--gold-border);
+  font-size:12px;color:var(--text2);line-height:1.6;
+}
+.judge-strip strong{color:var(--gold)}
+
+/* ── Match bottom bar (redesign) ──────────────────────── */
+.match-bottombar{
+  flex-shrink:0;
+  background:rgba(6,8,15,.96);
+  border-top:1px solid var(--border2);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  padding:8px 12px 12px;
+  display:flex;flex-direction:column;gap:8px;
+}
+/* Info row: status + turn badge */
+.mbb-info-row{
+  display:flex;align-items:center;gap:8px;min-height:20px;
+}
+.mbb-status{
+  display:flex;align-items:center;gap:6px;flex:1;min-width:0;
+}
+#matchStatusDot{
+  width:7px;height:7px;border-radius:50%;
+  background:var(--muted);flex-shrink:0;
+  transition:background .3s;
+}
+#matchStatusDot.listening  {background:var(--green); animation:dotPulse 1s ease-in-out infinite}
+#matchStatusDot.processing {background:var(--gold);  animation:dotPulse 1s ease-in-out infinite}
+#matchStatusDot.speaking   {background:var(--purple);animation:dotPulse .72s ease-in-out infinite}
+#matchStatusText{font-size:10.5px;color:var(--muted);font-style:italic;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Turn badge */
+.mbb-turn-badge{
+  padding:4px 10px;border-radius:12px;
+  font-size:10px;font-weight:800;letter-spacing:.3px;
+  white-space:nowrap;flex-shrink:0;
+  transition:background .3s,color .3s,border-color .3s;
+  background:rgba(255,255,255,.05);border:1px solid var(--border2);color:var(--muted);
+}
+.mbb-turn-badge.your-turn {background:var(--user-bg);border-color:var(--user-border);color:var(--user)}
+.mbb-turn-badge.ai-turn   {background:var(--ai-bg);  border-color:var(--ai-border);  color:var(--ai)}
+.mbb-turn-badge.judge-turn{background:var(--gold-bg);border-color:var(--gold-border);color:var(--gold)}
+/* Button row */
+.mbb-btn-row{display:flex;align-items:center;gap:10px}
+.mbb-side-btn{
+  width:44px;height:44px;border-radius:50%;flex-shrink:0;
+  border:1px solid var(--border2);background:rgba(255,255,255,.06);
+  color:var(--text2);font-size:16px;
+  cursor:pointer;touch-action:manipulation;
+  display:flex;align-items:center;justify-content:center;
+  transition:background .18s;-webkit-appearance:none;
+}
+.mbb-side-btn:active{background:rgba(255,255,255,.14)}
+
+/* Listening wave */
+.lwave{display:flex;align-items:center;gap:2px;height:14px;opacity:0;transition:opacity .28s;flex-shrink:0}
+.lwave.on{opacity:1}
+.lwave span{display:block;width:2.5px;border-radius:2px;background:var(--green);min-height:2px;animation:lwBar .88s ease-in-out infinite}
+.lwave span:nth-child(2){animation-delay:.09s}
+.lwave span:nth-child(3){animation-delay:.18s}
+.lwave span:nth-child(4){animation-delay:.27s}
+.lwave span:nth-child(5){animation-delay:.36s}
+@keyframes lwBar{0%,100%{height:2px}50%{height:12px}}
+
+/* Big PRESS TO TALK button */
+#micBtn{
+  flex:1;height:50px;border-radius:25px;
+  background:linear-gradient(135deg,#1fc990,#0baa73);
+  border:none;color:#fff;
+  font-size:13px;font-weight:900;letter-spacing:1.5px;
+  cursor:pointer;touch-action:manipulation;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  box-shadow:0 4px 22px rgba(31,201,144,.38);
+  transition:all .18s;-webkit-appearance:none;
+}
+#micBtn:active{transform:scale(.97);opacity:.9}
+#micBtn:disabled{opacity:.28;cursor:not-allowed;transform:none !important;box-shadow:none}
+#micBtn.recording{
+  background:linear-gradient(135deg,rgba(31,201,144,.25),rgba(11,170,115,.25));
+  border:2px solid var(--green);
+  box-shadow:0 0 30px rgba(31,201,144,.55);
+  animation:micPulse 1.2s ease-in-out infinite;
+}
+@keyframes micPulse{0%,100%{box-shadow:0 0 16px rgba(31,201,144,.4)}50%{box-shadow:0 0 36px rgba(31,201,144,.7)}}
+#micBtn.hidden{display:none}
+
+/* Insight / Coach hint card */
+.insight-card{
+  border-radius:12px;padding:10px 13px;
+  background:linear-gradient(135deg,rgba(245,197,66,.12),rgba(240,130,82,.07));
+  border:1.5px solid var(--gold-border);
+  display:none;animation:fadeUp .3s ease;
+  flex-direction:column;gap:4px;
+}
+.insight-card.visible{display:flex}
+.insight-hdr{
+  display:flex;align-items:center;gap:6px;
+  font-size:10px;font-weight:800;text-transform:uppercase;
+  letter-spacing:.5px;color:var(--gold);
+}
+.insight-body{font-size:12.5px;line-height:1.65;color:var(--text2)}
+
+/* Match topic inline card */
+.match-topic-card{
+  border-radius:12px;padding:10px 13px;
+  background:var(--surface);
+  border:1.5px solid var(--border2);
+  flex-shrink:0;
+}
+.match-topic-card-title{
+  font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;
+  color:var(--user);margin-bottom:4px;display:flex;align-items:center;gap:5px;
+}
+.match-topic-card-text{
+  font-size:13px;line-height:1.55;color:var(--text);font-weight:600;
+}
+
+
+/* ──────────────────────────────────────────────────────────── */
+/*  MULTIPLAYER LOBBY OVERLAY  (IMPROVE-02)                   */
+/* ──────────────────────────────────────────────────────────── */
+#mpLobby{
+  display:none;position:fixed;inset:0;z-index:500;
+  background:rgba(0,0,0,.88);
+  justify-content:center;align-items:center;padding:16px;
+}
+#mpLobby.visible{display:flex}
+
+.lobby-box{
+  background:linear-gradient(160deg,#0c0f1e 0%,#06080f 100%);
+  border:2px solid rgba(245,197,66,.35);
+  border-radius:18px;
+  padding:26px 28px;
+  width:100%;max-width:360px;
+  box-shadow:0 0 50px rgba(245,197,66,.12), inset 0 1px 0 rgba(255,255,255,.04);
+  color:var(--text);
+}
+.lobby-title{
+  font-size:22px;font-weight:900;letter-spacing:3px;text-transform:uppercase;
+  text-align:center;margin-bottom:3px;
+  background:linear-gradient(90deg,#f5c542,#f08052,#b46ef7);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.lobby-subtitle{
+  font-size:10px;letter-spacing:2.5px;color:var(--muted);
+  text-align:center;margin-bottom:22px;text-transform:uppercase;
+}
+
+/* Lobby views */
+.lv{display:none;flex-direction:column;gap:11px;align-items:center}
+.lv.active{display:flex}
+
+.lobby-input{
+  width:100%;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(245,197,66,.30);
+  border-radius:9px;
+  color:var(--text);
+  font-family:'Segoe UI',monospace;
+  font-size:18px;letter-spacing:4px;
+  text-align:center;text-transform:uppercase;
+  padding:11px 10px;outline:none;
+  -webkit-appearance:none;
+}
+.lobby-input::placeholder{color:rgba(255,255,255,.15);letter-spacing:2px}
+.lobby-input:focus{border-color:rgba(245,197,66,.6);box-shadow:0 0 10px rgba(245,197,66,.15)}
+
+.lobby-btn{
+  width:100%;padding:13px;border-radius:11px;border:none;cursor:pointer;
+  font-size:12px;font-weight:800;letter-spacing:2px;text-transform:uppercase;
+  transition:filter .1s,transform .06s;touch-action:manipulation;
+  -webkit-appearance:none;
+}
+.lobby-btn:active{transform:scale(.97);filter:brightness(.85)}
+.lbtn-gold  {background:linear-gradient(180deg,#f5c542,#c08810);color:#111}
+.lbtn-purple{background:linear-gradient(180deg,#b46ef7,#7030d0);color:#fff}
+.lbtn-green {background:linear-gradient(180deg,#1fc990,#0e8060);color:#fff}
+.lbtn-gray  {background:linear-gradient(180deg,#3a4060,#1a2030);color:var(--text2)}
+
+.lobby-code-display{
+  font-size:28px;font-weight:900;letter-spacing:10px;
+  color:var(--gold);
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(245,197,66,.30);
+  border-radius:9px;padding:11px 16px;
+  width:100%;text-align:center;text-transform:uppercase;
+}
+.lobby-status{
+  font-size:11px;letter-spacing:1.5px;color:var(--gold);
+  min-height:18px;text-align:center;
+}
+.lobby-hint{
+  font-size:10px;color:var(--muted);letter-spacing:.8px;
+  line-height:1.8;text-align:center;
+}
+.lobby-error{
+  color:var(--ai);font-size:10.5px;letter-spacing:.8px;
+  min-height:14px;text-align:center;
+}
+
+/* ──────────────────────────────────────────────────────────── */
+/*  SCREEN: POST-MATCH  (IMPROVE-04 redesign)                 */
+/* ──────────────────────────────────────────────────────────── */
+#screen-postmatch{display:none;flex-direction:column;overflow:hidden}
+#screen-postmatch.active{display:flex}
+
+.pm-hero{
+  flex-shrink:0;text-align:center;
+  padding:36px 20px 26px;
+  background:linear-gradient(180deg,rgba(245,197,66,.08) 0%,transparent 100%);
+  border-bottom:1px solid var(--border2);
+}
+.pm-trophy{font-size:64px;line-height:1;margin-bottom:10px;animation:trophyPop .5s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes trophyPop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+.pm-winner-name{
+  font-size:32px;font-weight:900;letter-spacing:-.5px;line-height:1.15;
+  margin-bottom:8px;
+}
+.pm-winner-name.user{
+  background:linear-gradient(90deg,var(--user),var(--purple));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.pm-winner-name.ai{
+  background:linear-gradient(90deg,var(--ai),var(--gold));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.pm-reason-badge{
+  display:inline-block;
+  padding:4px 12px;border-radius:12px;font-size:10px;font-weight:700;
+  background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-border);
+  text-transform:uppercase;letter-spacing:.4px;
+}
+
+.pm-body{
+  flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:12px 14px 80px;
+  display:flex;flex-direction:column;gap:12px;
+  scrollbar-width:thin;
+}
+.pm-body::-webkit-scrollbar{width:3px}
+.pm-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.09);border-radius:2px}
+
+/* Detail toggle button */
+.pm-detail-btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;padding:12px 16px;border-radius:12px;cursor:pointer;
+  background:var(--surface);border:1.5px solid var(--border2);
+  color:var(--text);font-size:13px;font-weight:700;letter-spacing:.3px;
+  touch-action:manipulation;transition:border-color .15s,background .15s;
+  -webkit-appearance:none;
+}
+.pm-detail-btn:active{background:var(--surface2);border-color:var(--gold-border)}
+.pm-detail-btn .det-icon{font-size:14px;transition:transform .22s;color:var(--muted)}
+.pm-detail-btn.open .det-icon{transform:rotate(180deg)}
+
+/* Mini star gauge inside exchange card */
+.pm-mini-gauge-wrap{margin-top:4px}
+.pm-mini-gauge-label{font-size:9px;color:var(--muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:3px}
+.pm-mini-gauge-bg{
+  height:5px;border-radius:3px;
+  background:linear-gradient(90deg,var(--user-bg) 0%,var(--surface2) 50%,var(--ai-bg) 100%);
+  position:relative;
+}
+.pm-mini-gauge-star{
+  position:absolute;top:50%;transform:translate(-50%,-50%);
+  font-size:11px;line-height:1;pointer-events:none;
+  transition:left .6s cubic-bezier(.34,1.2,.64,1);
+}
+
+/* Exchange entries in summary */
+.pm-exchange{
+  background:var(--surface);border:1.5px solid var(--border2);
+  border-radius:12px;padding:11px 13px;
+  display:flex;flex-direction:column;gap:8px;
+}
+.pm-ex-hdr{
+  display:flex;align-items:center;gap:8px;
+  font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);
+}
+.pm-ex-hdr .ex-num{
+  padding:2px 8px;border-radius:10px;
+  background:var(--surface2);color:var(--text2);
+  border:1px solid var(--border2);
+}
+.pm-ex-hdr .ex-delta{
+  padding:2px 8px;border-radius:10px;border:1px solid;font-size:9px;
+}
+.pm-ex-hdr .ex-delta.user{background:var(--user-bg);color:var(--user);border-color:var(--user-border)}
+.pm-ex-hdr .ex-delta.ai  {background:var(--ai-bg);  color:var(--ai);  border-color:var(--ai-border)}
+.pm-stmt{padding:7px 10px;border-radius:8px;font-size:12.5px;line-height:1.65;word-break:break-word}
+.pm-stmt.ai-stmt  {background:var(--ai-bg);  border:1px solid var(--ai-border);  color:#ffc8c8}
+.pm-stmt.user-stmt{background:var(--user-bg);border:1px solid var(--user-border);color:#c0d8ff}
+.pm-stmt .stmt-who{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
+.pm-judge-note{font-size:11.5px;color:var(--text2);line-height:1.6;padding:5px 0}
+.pm-judge-note strong{color:var(--gold)}
+
+/* Scorecard */
+.scorecard{
+  background:var(--surface);border:1.5px solid var(--gold-border);
+  border-radius:12px;padding:12px 14px;
+}
+.scorecard-title{
+  font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;
+  color:var(--gold);margin-bottom:10px;
+}
+.score-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.score-label{font-size:11px;color:var(--text2);min-width:72px;font-weight:600}
+.score-bar-bg{flex:1;height:6px;border-radius:3px;background:var(--surface2)}
+.score-bar-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--gold),var(--green));transition:width .8s cubic-bezier(.34,1.2,.64,1)}
+.score-val{font-size:11px;font-weight:800;color:var(--gold);min-width:22px;text-align:right}
+.scorecard-verdict{
+  font-size:12.5px;color:var(--text2);line-height:1.7;
+  margin-top:10px;padding-top:10px;border-top:1px solid var(--border2);
+}
+
+/* Bottom buttons */
+.pm-btns{
+  position:fixed;bottom:0;left:0;right:0;
+  padding:10px 14px 16px;
+  background:linear-gradient(to top,var(--bg) 65%,transparent);
+  display:flex;gap:10px;z-index:10;
+}
+
+</style>
+</head>
+<body>
+
+<!-- ══ Header ════════════════════════════════════════════════ -->
+<header>
+  <div class="logo">⚔️</div>
+  <div class="hdr-info">
+    <div class="hdr-title">Debate Fighter</div>
+    <div class="hdr-sub">Voice · AI · Battle</div>
+  </div>
+  <div id="apiDot" title="API key status"></div>
+  <button id="apiToggleBtn">🔑 API Key</button>
+</header>
+
+<!-- ══ API Key Drawer ════════════════════════════════════════ -->
+<div id="apiDrawer" class="hidden">
+  <input id="apiKeyInput" type="password"
+    placeholder="Paste your OpenAI API key (sk-…)"
+    autocomplete="off" spellcheck="false">
+  <button id="apiSetBtn">Save</button>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  SCREENS                                                  -->
+<!-- ══════════════════════════════════════════════════════════ -->
+
+<!-- CONFIG SCREEN (TODO-03) -->
+<div id="screen-config" class="screen scroll-y">
+
+  <!-- Hero -->
+  <div class="cfg-hero">
+    <div class="cfg-hero-title">Debate Fighter</div>
+    <div class="cfg-hero-sub">Choose your battle settings, then step into the arena</div>
+  </div>
+
+  <!-- Topic Selection (IMPROVE-01: custom vs database) -->
+  <div class="cfg-row">
+    <div class="cfg-label"><span class="cfg-label-icon">💬</span> Topic</div>
+    <div class="topic-card">
+
+      <!-- Tab toggle -->
+      <div class="topic-tab-row">
+        <button class="topic-tab" id="tabCustom" onclick="switchTopicTab('custom')">✏️ Custom Topic</button>
+        <button class="topic-tab active" id="tabRandom" onclick="switchTopicTab('random')">🎲 Random from DB</button>
+      </div>
+
+      <!-- Custom topic pane -->
+      <div class="topic-custom-pane" id="topicCustomPane">
+        <textarea class="custom-topic-input" id="customTopicInput"
+          rows="2" placeholder="Type your debate topic here…&#10;e.g. Social media does more harm than good"
+          spellcheck="false"></textarea>
+        <div class="custom-topic-row">
+          <button class="custom-topic-mic" id="customTopicMic" title="Record topic via voice">🎤</button>
+          <button class="use-topic-btn" id="useCustomTopicBtn">✓ Use This Topic</button>
+        </div>
+      </div>
+
+      <!-- Random from DB pane -->
+      <div class="topic-db-pane visible" id="topicDbPane">
+        <div class="section-label" style="margin-bottom:4px">Category Filter</div>
+        <div class="cat-pills" id="catPills">
+          <button class="cat-pill active" data-cat="all">All</button>
+          <button class="cat-pill" data-cat="ethics">Ethics</button>
+          <button class="cat-pill" data-cat="tech">Tech</button>
+          <button class="cat-pill" data-cat="philosophy">Philosophy</button>
+          <button class="cat-pill" data-cat="politics">Politics</button>
+          <button class="cat-pill" data-cat="popculture">Pop Culture</button>
+          <button class="cat-pill" data-cat="business">Business</button>
+          <button class="cat-pill" data-cat="lifestyle">Life &amp; Love</button>
+        </div>
+        <div class="topic-display" id="topicDisplay">
+          <span style="color:var(--muted);font-weight:400;font-size:12px">
+            Press "Random Topic" to pick one, or select a category first
+          </span>
+        </div>
+        <button class="random-btn" id="randomTopicBtn">🎲 Random Topic</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Mode -->
+  <div class="cfg-row">
+    <div class="cfg-label"><span class="cfg-label-icon">🎮</span> Mode</div>
+    <div class="mode-group" id="modeGroup">
+      <div class="mode-card active" data-mode="solo">
+        <div class="mc-icon">🤖</div>
+        <div class="mc-name">Solo vs AI</div>
+        <div class="mc-desc">Debate GPT-4o alone</div>
+      </div>
+      <div class="mode-card" data-mode="multiplayer">
+        <div class="mc-icon">👥</div>
+        <div class="mc-name">Human vs Human</div>
+        <div class="mc-desc">2 players via PeerJS</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Difficulty -->
+  <div class="cfg-row">
+    <div class="cfg-label"><span class="cfg-label-icon">⚡</span> Difficulty</div>
+    <div class="pill-group" id="difficultyGroup">
+      <button class="pill" data-val="easy">Easy</button>
+      <button class="pill active" data-val="medium">Medium</button>
+      <button class="pill" data-val="hard">Hard</button>
+      <button class="pill" data-val="expert">Expert</button>
+    </div>
+  </div>
+
+  <!-- AI Persona -->
+  <div class="cfg-row">
+    <div class="cfg-label"><span class="cfg-label-icon">🎭</span> AI Persona</div>
+    <div class="pill-group" id="personaGroup">
+      <button class="pill active" data-val="default">Default</button>
+      <button class="pill" data-val="lawyer">Lawyer</button>
+      <button class="pill" data-val="philosopher">Philosopher</button>
+      <button class="pill" data-val="politician">Politician</button>
+      <button class="pill" data-val="devil">Devil's Advocate</button>
+    </div>
+  </div>
+
+  <!-- Tone -->
+  <div class="cfg-row">
+    <div class="cfg-label"><span class="cfg-label-icon">🎵</span> Tone</div>
+    <div class="pill-group" id="toneGroup">
+      <button class="pill" data-val="harsh">Harsh</button>
+      <button class="pill" data-val="casual">Casual</button>
+      <button class="pill active" data-val="professional">Professional</button>
+    </div>
+  </div>
+
+  <!-- Language -->
+  <div class="cfg-row">
+    <div class="cfg-label"><span class="cfg-label-icon">🌐</span> Language</div>
+    <div class="pill-group" id="languageGroup">
+      <button class="pill active" data-val="english">English</button>
+      <button class="pill" data-val="chinese">Chinese</button>
+    </div>
+  </div>
+
+  <!-- Voice -->
+  <div class="cfg-row">
+    <div class="cfg-label"><span class="cfg-label-icon">🔊</span> AI Voice</div>
+    <div class="pill-group" id="voiceGroup">
+      <button class="pill" data-val="robot">🤖 Robot</button>
+      <button class="pill active" data-val="real">🎙️ Real AI</button>
+      <button class="pill" data-val="person">👤 Person</button>
+    </div>
+  </div>
+
+  <!-- Coaching Hint -->
+  <div class="cfg-row">
+    <div class="cfg-label"><span class="cfg-label-icon">💡</span> Coaching Hint</div>
+    <div class="pill-group" id="coachingGroup">
+      <button class="pill active" data-val="on">On</button>
+      <button class="pill" data-val="off">Off</button>
+    </div>
+  </div>
+
+  <!-- Spacer for fixed start button -->
+  <div style="height:70px;flex-shrink:0"></div>
+</div>
+
+<!-- Fixed Start Button (overlays bottom of config screen) -->
+<div class="cfg-start-wrap" id="cfgStartWrap" style="display:none">
+  <button class="btn-primary" id="startBattleBtn">⚔️ Start Battle</button>
+</div>
+
+
+<!-- RPS SCREEN (TODO-05) -->
+<div id="screen-rps" class="screen">
+  <div class="rps-header">
+    <div class="rps-title">Rock · Paper · Scissors</div>
+    <div class="rps-topic">
+      Topic: <strong id="rpsTopic">—</strong>
+    </div>
+  </div>
+
+  <div class="rps-phase-label" id="rpsPhaseLabel">Pick your move!</div>
+
+  <!-- User pick buttons -->
+  <div class="rps-picks" id="rpsPicks">
+    <button class="rps-btn" data-pick="rock"     id="rpsRock">🪨</button>
+    <button class="rps-btn" data-pick="paper"    id="rpsPaper">📄</button>
+    <button class="rps-btn" data-pick="scissors" id="rpsScissors">✂️</button>
+  </div>
+
+  <!-- Reveal row (hidden until picked) -->
+  <div class="rps-reveal" id="rpsReveal">
+    <div class="rps-reveal-side">
+      <div class="rps-reveal-emoji" id="rpsUserEmoji"></div>
+      <div class="rps-reveal-label">You</div>
+    </div>
+    <div class="rps-vs">VS</div>
+    <div class="rps-reveal-side">
+      <div class="rps-reveal-emoji" id="rpsAiEmoji"></div>
+      <div class="rps-reveal-label" id="rpsAiLabel">AI</div>
+    </div>
+  </div>
+
+  <!-- Result banner -->
+  <div class="rps-result" id="rpsResult"></div>
+
+  <button class="btn-ghost" style="margin-top:10px"
+    onclick="quitToSettings()">← Change Settings</button>
+</div>
+
+<!-- MATCH SCREEN (TODO-06 + TODO-07) -->
+<div id="screen-match" class="screen">
+
+  <!-- Top bar: topic + game timer -->
+  <div class="match-topbar">
+    <div class="match-topic-label">
+      <strong>Topic:</strong> <span id="matchTopicLabel">—</span>
+    </div>
+    <div class="game-timer" id="gameTimer">10:00</div>
+  </div>
+
+  <!-- Debate Gauge (redesigned) -->
+  <div class="gauge-wrap">
+    <!-- Score delta chips (shown after each judge result) -->
+    <div class="gauge-score-row">
+      <div class="gauge-score-chip chip-ai" id="gaugeScoreAi">
+        <span>▼</span><span id="gaugeScoreAiVal">0.0</span>
+      </div>
+      <div class="gauge-hint-text" id="gaugeHintText">Stay here for 3+ rounds to win</div>
+      <div class="gauge-score-chip chip-user" id="gaugeScoreUser">
+        <span>▲</span><span id="gaugeScoreUserVal">0.0</span>
+      </div>
+    </div>
+    <!-- Track -->
+    <div class="gauge-track" id="gaugeTrack">
+      <div class="gauge-center-mark"></div>
+      <div class="gauge-star" id="gaugeStar" style="left:50%">⭐</div>
+    </div>
+    <!-- Labels -->
+    <div class="gauge-labels">
+      <span class="gauge-label-ai">◀ AI Advantage</span>
+      <span class="gauge-label-center">Gauge Point</span>
+      <span class="gauge-label-user">User Advantage ▶</span>
+    </div>
+    <!-- Knockout indicator -->
+    <div class="ko-indicator" id="koIndicator" style="display:none">
+      <span class="ko-label" id="koLabel">KNOCKOUT!</span>
+      <span class="ko-dot" id="koDot1"></span>
+      <span class="ko-dot" id="koDot2"></span>
+      <span class="ko-dot" id="koDot3"></span>
+    </div>
+  </div>
+
+  <!-- Turn banner -->
+  <div class="turn-banner user-turn" id="turnBanner">⏳ Waiting…</div>
+
+  <!-- 30-sec turn timer -->
+  <div class="turn-timer-wrap">
+    <div class="turn-timer-bar-bg">
+      <div class="turn-timer-bar" id="turnTimerBar" style="width:100%"></div>
+    </div>
+    <div class="turn-timer-secs" id="turnTimerSecs">30s</div>
+  </div>
+
+  <!-- Statement panels -->
+  <div class="match-panels" id="matchPanels">
+
+    <!-- Inline topic card -->
+    <div class="match-topic-card">
+      <div class="match-topic-card-title">🗣️ Debate Topic</div>
+      <div class="match-topic-card-text" id="panelTopicText">—</div>
+    </div>
+
+    <!-- AI / Opponent card — "Opponent's Response Summary" -->
+    <div class="statement-card ai-card" id="aiCard">
+      <div class="stmt-hdr">
+        <div class="stmt-avatar ai" id="aiAvatarIcon">🤖</div>
+        <div class="stmt-name ai" id="aiName">Opponent's Response</div>
+        <div class="stmt-badge done" id="aiBadge">–</div>
+      </div>
+      <div class="stmt-stance" id="aiStance"></div>
+      <div class="stmt-text" id="aiText">
+        <span class="placeholder">Opponent's statement will appear here…</span>
+      </div>
+    </div>
+
+    <!-- User statement card -->
+    <div class="statement-card user-card" id="userCard">
+      <div class="stmt-hdr">
+        <div class="stmt-avatar user">🎤</div>
+        <div class="stmt-name user">You</div>
+        <div class="stmt-badge done" id="userBadge">–</div>
+      </div>
+      <div class="stmt-stance" id="userStance"></div>
+      <div class="stmt-text" id="userText">
+        <span class="placeholder">Your statement will appear here…</span>
+      </div>
+    </div>
+
+    <!-- Judge strip (hidden until after first exchange) -->
+    <div class="judge-strip" id="judgeStrip" style="display:none">
+      <strong>⚖️ Judge:</strong> <span id="judgeReason">—</span>
+    </div>
+
+    <!-- Coach / Insight card (inline, replaces floating overlay) -->
+    <div class="insight-card" id="insightCard">
+      <div class="insight-hdr">💡 Insight</div>
+      <div class="insight-body" id="insightText">—</div>
+    </div>
+
+  </div>
+
+  <!-- Match bottom bar -->
+  <div class="match-bottombar">
+    <div class="mbb-info-row">
+      <div class="mbb-status">
+        <div id="matchStatusDot"></div>
+        <span id="matchStatusText">Waiting to start…</span>
+        <div class="lwave" id="matchListeningWave">
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+      </div>
+      <div class="mbb-turn-badge" id="mbbTurnBadge">–</div>
+    </div>
+    <div class="mbb-btn-row">
+      <button class="mbb-side-btn" title="Back to menu" onclick="quitToSettings()">⚙️</button>
+      <button id="micBtn" title="Record your argument">
+        <span style="font-size:20px">🎤</span>
+        <span>PRESS TO TALK</span>
+      </button>
+      <button class="mbb-side-btn" title="Stop audio" onclick="handleStop()">⏹</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- POST-MATCH SCREEN (IMPROVE-04 redesign) -->
+<div id="screen-postmatch" class="screen">
+
+  <div class="pm-hero">
+    <div class="pm-trophy" id="pmTrophy">🏆</div>
+    <div class="pm-winner-name" id="pmWinnerName">—</div>
+    <div class="pm-reason-badge" id="pmReasonBadge">Match complete</div>
+  </div>
+
+  <div class="pm-body" id="pmBody">
+
+    <!-- Single expandable details button -->
+    <button class="pm-detail-btn" id="pmDetailToggle">
+      <span>📋 View Summary Details</span>
+      <span class="det-icon">▼</span>
+    </button>
+
+    <!-- Expandable panel: scorecard + exchange log -->
+    <div id="pmDetailPanel" style="display:none;flex-direction:column;gap:12px">
+
+      <!-- Breakdown scorecard (filled by callBreakdown) -->
+      <div class="scorecard" id="pmScorecard" style="display:none">
+        <div class="scorecard-title">⚖️ Debate Scorecard</div>
+        <div class="score-row">
+          <span class="score-label">Logic</span>
+          <div class="score-bar-bg"><div class="score-bar-fill" id="scLogic" style="width:0%"></div></div>
+          <span class="score-val" id="scLogicVal">—</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">Evidence</span>
+          <div class="score-bar-bg"><div class="score-bar-fill" id="scEvidence" style="width:0%"></div></div>
+          <span class="score-val" id="scEvidenceVal">—</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">Clarity</span>
+          <div class="score-bar-bg"><div class="score-bar-fill" id="scClarity" style="width:0%"></div></div>
+          <span class="score-val" id="scClarityVal">—</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">Emotion</span>
+          <div class="score-bar-bg"><div class="score-bar-fill" id="scEmotion" style="width:0%"></div></div>
+          <span class="score-val" id="scEmotionVal">—</span>
+        </div>
+        <div class="scorecard-verdict" id="scVerdict"></div>
+      </div>
+
+      <!-- Per-exchange log -->
+      <div id="pmExchangeList" style="flex-direction:column;gap:10px;display:flex"></div>
+
+    </div><!-- /pmDetailPanel -->
+
+    <div style="height:60px;flex-shrink:0"></div>
+  </div>
+
+  <div class="pm-btns">
+    <button class="btn-ghost" style="flex:1" onclick="quitToSettings()">← Menu</button>
+    <button class="btn-primary" style="flex:2" onclick="rematchFromPostMatch()">⚔️ Play Again</button>
+  </div>
+
+</div>
+
+
+<!-- ══ MULTIPLAYER LOBBY OVERLAY (IMPROVE-02) ═══════════════ -->
+<div id="mpLobby">
+  <div class="lobby-box">
+    <div class="lobby-title">Debate Fighter</div>
+    <div class="lobby-subtitle">Human vs Human — PeerJS</div>
+
+    <!-- View: home -->
+    <div class="lv active" id="lv-home">
+      <button class="lobby-btn lbtn-gold"   onclick="lobbyShowCreate()">⚔️ Create Room</button>
+      <button class="lobby-btn lbtn-purple" onclick="lobbyShowJoin()">🔗 Join Room</button>
+      <button class="lobby-btn lbtn-gray"   onclick="lobbyClose()">← Cancel</button>
+    </div>
+
+    <!-- View: create -->
+    <div class="lv" id="lv-create">
+      <input class="lobby-input" id="inp-create" maxlength="12"
+        placeholder="ROOM NAME" autocomplete="off" spellcheck="false">
+      <button class="lobby-btn lbtn-gold" onclick="doCreateRoom()">Create &amp; Wait</button>
+      <button class="lobby-btn lbtn-gray" onclick="lobbyBack()">← Back</button>
+      <div class="lobby-error" id="err-create"></div>
+    </div>
+
+    <!-- View: join -->
+    <div class="lv" id="lv-join">
+      <input class="lobby-input" id="inp-join" maxlength="12"
+        placeholder="ROOM NAME" autocomplete="off" spellcheck="false">
+      <button class="lobby-btn lbtn-green" onclick="doJoinRoom()">Join Battle</button>
+      <button class="lobby-btn lbtn-gray"  onclick="lobbyBack()">← Back</button>
+      <div class="lobby-error" id="err-join"></div>
+    </div>
+
+    <!-- View: waiting (P1 waits for P2) -->
+    <div class="lv" id="lv-waiting">
+      <div class="lobby-status" id="waiting-status">Waiting for opponent…</div>
+      <div class="lobby-code-display" id="disp-code"></div>
+      <div class="lobby-hint">Share this room name with your opponent.<br>They enter it under Join Room.</div>
+      <button class="lobby-btn lbtn-gray" onclick="lobbyBack()">← Cancel</button>
+    </div>
+
+    <!-- View: connecting (P2 dials P1) -->
+    <div class="lv" id="lv-connecting">
+      <div class="lobby-status" id="connecting-status">Connecting…</div>
+      <button class="lobby-btn lbtn-gray" onclick="lobbyBack()">← Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Toast ═════════════════════════════════════════════════ -->
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════════
+//  GLOBAL STATE
+// ═══════════════════════════════════════════════════════════
+const S = {
+  apiKey:      '',
+  // Config (populated by TODO-03)
+  topic:       '',
+  category:    '',
+  mode:        'solo',        // 'solo' | 'multiplayer'
+  difficulty:  'medium',      // 'easy' | 'medium' | 'hard' | 'expert'
+  persona:     'default',     // 'default' | 'lawyer' | 'philosopher' | 'politician' | 'devil'
+  coaching:    true,
+  language:    'english',     // 'english' | 'chinese'
+  tone:        'professional',// 'harsh' | 'casual' | 'professional'
+  voice:       'real',        // 'robot' | 'real' | 'person'
+  // Match state (populated by later TODOs)
+  firstSpeaker: 'user',       // 'user' | 'ai'
+  userSide:    '正方',         // '正方' | '反方' — derived from RPS winner
+  aiSide:      '反方',         // '反方' | '正方' — derived from RPS winner
+  forStance:   '',             // GPT-generated label for the 正方 position
+  againstStance:'',            // GPT-generated label for the 反方 position
+  starPos:     0.5,           // 0.0 = full AI side, 1.0 = full user side
+  exchanges:   [],            // array of exchange records
+  gamePhase:   'idle',        // 'idle'|'rps'|'match'|'knockout'|'postmatch'
+};
+
+// ═══════════════════════════════════════════════════════════
+//  SCREEN MANAGEMENT
+// ═══════════════════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  // Show/hide config start button based on active screen + topic
+  const wrap = document.getElementById('cfgStartWrap');
+  if (wrap) wrap.style.display = (id === 'screen-config' && S.topic) ? 'block' : 'none';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════════════════
+let _toastTimer;
+function toast(msg, ms = 3000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), ms);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SAFE HTML ESCAPE
+// ═══════════════════════════════════════════════════════════
+function esc(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  API KEY — XOR + Base64 obfuscation helper
+// ═══════════════════════════════════════════════════════════
+function _dk(e) {
+  const _x = [0x4B,0xA3,0x1F,0xD7,0x82,0x5E,0xC9,0x36,0xF4,0x71,0xBB,0x2D,0x9E,0x60,0xE5,0x18];
+  try {
+    const b = atob(e);
+    let r = '';
+    for (let i = 0; i < b.length; i++)
+      r += String.fromCharCode(b.charCodeAt(i) ^ _x[i % _x.length]);
+    return r;
+  } catch { return ''; }
+}
+
+function saveApiKey() {
+  const k = document.getElementById('apiKeyInput').value.trim();
+  if (!k) { toast('Please enter your OpenAI API key'); return; }
+  S.apiKey = k;
+  try { localStorage.setItem('df_api_key', k); } catch (_) {}
+  document.getElementById('apiDot').classList.add('ok');
+  document.getElementById('apiDrawer').classList.add('hidden');
+  toast('API key saved ✓');
+}
+
+// Toggle API drawer
+document.getElementById('apiToggleBtn').addEventListener('click', () => {
+  const d = document.getElementById('apiDrawer');
+  d.classList.toggle('hidden');
+  if (!d.classList.contains('hidden'))
+    setTimeout(() => document.getElementById('apiKeyInput').focus(), 50);
+});
+
+document.getElementById('apiSetBtn').addEventListener('click', saveApiKey);
+document.getElementById('apiKeyInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') saveApiKey();
+});
+
+// ═══════════════════════════════════════════════════════════
+//  TODO-03: CONFIG SCREEN  logic
+// ═══════════════════════════════════════════════════════════
+
+// ── Pill group helper ────────────────────────────────────────
+function initPillGroup(groupId, stateKey) {
+  const group = document.getElementById(groupId);
+  if (!group) return;
+  group.querySelectorAll('.pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      group.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      S[stateKey] = pill.dataset.val;
+    });
+  });
+}
+
+// ── Mode cards ───────────────────────────────────────────────
+document.getElementById('modeGroup').querySelectorAll('.mode-card').forEach(card => {
+  card.addEventListener('click', () => {
+    document.getElementById('modeGroup').querySelectorAll('.mode-card')
+      .forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+    S.mode = card.dataset.mode;
+    // If multiplayer selected, nudge user to open lobby after choosing settings
+  });
+});
+
+// ── Category pills ───────────────────────────────────────────
+document.getElementById('catPills').querySelectorAll('.cat-pill').forEach(pill => {
+  pill.addEventListener('click', () => {
+    document.getElementById('catPills').querySelectorAll('.cat-pill')
+      .forEach(p => p.classList.remove('active'));
+    pill.classList.add('active');
+    S.category = pill.dataset.cat === 'all' ? '' : pill.dataset.cat;
+  });
+});
+
+// ── Init all pill selectors ──────────────────────────────────
+initPillGroup('difficultyGroup', 'difficulty');
+initPillGroup('personaGroup',    'persona');
+initPillGroup('toneGroup',       'tone');
+initPillGroup('languageGroup',   'language');
+initPillGroup('voiceGroup',      'voice');
+initPillGroup('coachingGroup',   'coaching');
+document.getElementById('coachingGroup').querySelectorAll('.pill').forEach(pill => {
+  pill.addEventListener('click', () => { S.coaching = pill.dataset.val === 'on'; });
+});
+
+// ── Show start button once a topic is picked ─────────────────
+function checkReadyToStart() {
+  const wrap = document.getElementById('cfgStartWrap');
+  if (S.topic && wrap) wrap.style.display = 'block';
+}
+
+// ─────────────────────────────────────────────────────────────
+//  IMPROVE-01: CUSTOM TOPIC  (voice/text input)
+// ─────────────────────────────────────────────────────────────
+
+// Tab switch
+function switchTopicTab(tab) {
+  const isCustom = tab === 'custom';
+  document.getElementById('tabCustom').classList.toggle('active',  isCustom);
+  document.getElementById('tabRandom').classList.toggle('active', !isCustom);
+  document.getElementById('topicCustomPane').classList.toggle('visible',  isCustom);
+  document.getElementById('topicDbPane').classList.toggle('visible', !isCustom);
+  S._topicTab = tab;
+}
+
+// Confirm custom topic
+function confirmCustomTopic() {
+  const val = document.getElementById('customTopicInput').value.trim();
+  if (!val) { toast('Please enter or speak your topic first'); return; }
+  S.topic    = val;
+  S.category = 'custom';
+  toast('Topic set ✓');
+  checkReadyToStart();
+}
+document.getElementById('useCustomTopicBtn').addEventListener('click', confirmCustomTopic);
+document.getElementById('customTopicInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); confirmCustomTopic(); }
+});
+
+// Custom topic mic — record via Whisper, fill input
+let _ctMic = null, _ctChunks = [];
+document.getElementById('customTopicMic').addEventListener('click', async () => {
+  const btn = document.getElementById('customTopicMic');
+  if (_ctMic && _ctMic.state !== 'inactive') {
+    // Stop recording
+    _ctMic.stop();
+    return;
+  }
+  if (!S.apiKey) {
+    toast('API key required for voice input');
+    document.getElementById('apiDrawer').classList.remove('hidden');
+    setTimeout(() => document.getElementById('apiKeyInput').focus(), 50);
+    return;
+  }
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch { toast('Microphone access denied'); return; }
+  _ctChunks = [];
+  btn.classList.add('recording');
+  btn.title = 'Tap to stop recording';
+  const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4']
+    .find(t => MediaRecorder.isTypeSupported(t)) || '';
+  _ctMic = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+  _ctMic.ondataavailable = e => { if (e.data.size > 0) _ctChunks.push(e.data); };
+  _ctMic.onstop = async () => {
+    btn.classList.remove('recording');
+    btn.title = 'Record topic via voice';
+    try { stream.getTracks().forEach(t => t.stop()); } catch(_){}
+    const blob = new Blob(_ctChunks, { type: _ctMic.mimeType || 'audio/webm' });
+    _ctChunks = [];
+    if (blob.size < 1000) { toast('No speech detected'); return; }
+    btn.textContent = '⏳';
+    try {
+      const transcript = await transcribeAudio(blob);
+      if (transcript) {
+        document.getElementById('customTopicInput').value = transcript;
+        toast('Topic transcribed ✓');
+      } else { toast('No speech detected'); }
+    } catch(err) { toast('Mic error: ' + err.message); }
+    btn.textContent = '🎤';
+  };
+  _ctMic.start();
+  toast('Recording topic… tap 🎤 again to stop');
+});
+
+// ── Start Battle button ──────────────────────────────────────
+document.getElementById('startBattleBtn').addEventListener('click', () => {
+  if (!S.apiKey) {
+    document.getElementById('apiDrawer').classList.remove('hidden');
+    setTimeout(() => document.getElementById('apiKeyInput').focus(), 50);
+    toast('Please set your OpenAI API key first');
+    return;
+  }
+  if (!S.topic) { toast('Please pick a topic first'); return; }
+  showScreen('screen-rps');
+});
+
+// ── Show cfgStartWrap only when config screen is visible ──────
+// (observer wires it up after init runs)
+
+// ═══════════════════════════════════════════════════════════
+//  TODO-05: RPS MINI-GAME
+// ═══════════════════════════════════════════════════════════
+const RPS_EMOJI  = { rock:'🪨', paper:'📄', scissors:'✂️' };
+const RPS_BEATS  = { rock:'scissors', paper:'rock', scissors:'paper' };
+
+function rpsStart() {
+  // Populate topic label
+  document.getElementById('rpsTopic').textContent = S.topic || '—';
+  document.getElementById('rpsAiLabel').textContent = S.mode === 'multiplayer' ? 'Opponent' : 'AI';
+
+  // Reset UI
+  document.getElementById('rpsPhaseLabel').textContent = 'Pick your move!';
+  document.getElementById('rpsReveal').classList.remove('visible');
+  document.getElementById('rpsResult').className   = 'rps-result';
+  document.getElementById('rpsResult').textContent = '';
+  document.getElementById('rpsUserEmoji').textContent = '';
+  document.getElementById('rpsAiEmoji').textContent   = '';
+  document.getElementById('rpsUserEmoji').classList.remove('anim');
+  document.getElementById('rpsAiEmoji').classList.remove('anim');
+  document.querySelectorAll('.rps-btn').forEach(b => {
+    b.disabled = false;
+    b.classList.remove('selected');
+  });
+}
+
+function rpsResolve(userPick) {
+  const aiPick = ['rock','paper','scissors'][Math.floor(Math.random() * 3)];
+
+  // Disable all buttons
+  document.querySelectorAll('.rps-btn').forEach(b => {
+    b.disabled = true;
+    b.classList.toggle('selected', b.dataset.pick === userPick);
+  });
+
+  document.getElementById('rpsPhaseLabel').textContent = 'Revealing…';
+
+  // Show reveal area
+  const reveal = document.getElementById('rpsReveal');
+  const userEl = document.getElementById('rpsUserEmoji');
+  const aiEl   = document.getElementById('rpsAiEmoji');
+  reveal.classList.add('visible');
+  userEl.textContent = RPS_EMOJI[userPick];
+  aiEl.textContent   = '❓';
+
+  // Animate user pick then AI pick
+  setTimeout(() => {
+    userEl.classList.add('anim');
+    setTimeout(() => {
+      aiEl.textContent = RPS_EMOJI[aiPick];
+      aiEl.classList.add('anim');
+
+      // Determine result
+      setTimeout(() => {
+        const resultEl = document.getElementById('rpsResult');
+        if (userPick === aiPick) {
+          // Tie — re-do
+          resultEl.textContent = '🤝 Tie! Going again…';
+          resultEl.className   = 'rps-result tie visible';
+          document.getElementById('rpsPhaseLabel').textContent = 'It\'s a tie!';
+          setTimeout(() => rpsStart(), 1600);
+        } else {
+          const userWins = RPS_BEATS[userPick] === aiPick;
+          S.firstSpeaker = userWins ? 'user' : 'ai';
+
+          resultEl.textContent = userWins
+            ? `🎉 You win! You are 正方 (FOR the proposition).`
+            : `💀 AI wins! You are 反方 (AGAINST the proposition).`;
+          resultEl.className = `rps-result visible ${userWins ? 'win' : 'lose'}`;
+          document.getElementById('rpsPhaseLabel').textContent = userWins
+            ? 'You go first!'
+            : 'AI goes first!';
+
+          // Transition to match after short delay
+          setTimeout(() => {
+            showScreen('screen-match');
+            if (typeof matchStart === 'function') matchStart();
+          }, 1800);
+        }
+      }, 400);
+    }, 350);
+  }, 100);
+}
+
+// Wire up RPS buttons
+document.querySelectorAll('.rps-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.disabled) return;
+    if (mp.active) return; // multiplayer handles RPS separately
+    rpsResolve(btn.dataset.pick);
+  });
+});
+
+// Called by showScreen when navigating to RPS
+const _origShowScreen = showScreen;
+showScreen = function(id) {
+  _origShowScreen(id);
+  if (id === 'screen-rps') rpsStart();
+};
+
+// ═══════════════════════════════════════════════════════════
+//  TODO-04: TOPIC DATABASE
+// ═══════════════════════════════════════════════════════════
+
+// Category display labels (en + zh)
+const CAT_LABELS = {
+  all:        { en: 'General',     zh: '综合'     },
+  ethics:     { en: 'Ethics',      zh: '道德伦理' },
+  tech:       { en: 'Tech',        zh: '科技'     },
+  philosophy: { en: 'Philosophy',  zh: '哲学'     },
+  politics:   { en: 'Politics',    zh: '政治'     },
+  popculture: { en: 'Pop Culture', zh: '流行文化' },
+  business:   { en: 'Business',    zh: '商业职场' },
+  lifestyle:  { en: 'Life & Love', zh: '生活感情' },
+};
+
+const TOPICS = {
+  ethics: [
+    'Should euthanasia be legal?',
+    'Is capital punishment ever justified?',
+    'Should organ donation be mandatory (opt-out)?',
+    'Is it ethical to eat meat?',
+    'Should genetic enhancement of humans be allowed?',
+    'Is whistleblowing always morally justified?',
+    'Should wealthy nations have open borders?',
+    'Is it ethical for companies to track employee productivity?',
+    'Should billionaires exist in a just society?',
+    'Is civil disobedience ever morally required?',
+    'Should parents have the right to religiously raise their children?',
+    'Is it wrong to lie to protect someone\'s feelings?',
+    'Should animal testing for medical research be banned?',
+    'Is affirmative action fair?',
+    'Should there be a universal basic income?',
+    'Is it ethical to have children given climate change?',
+    'Should people be held accountable for online speech offline?',
+    'Is patriotism a virtue or a vice?',
+    'Should corporations have the same rights as individuals?',
+    'Is privacy more important than national security?',
+    'Can revenge ever be morally justified?',
+    'Should people be allowed to sell their own organs?',
+    'Is it ethical to keep secrets in a close relationship?',
+    'Is positive discrimination ever truly fair?',
+    'Should children be taught religion before they can choose for themselves?',
+    'Is it wrong to prioritise your own family over a stranger in need?',
+    'Should AI-generated evidence be admissible in court?',
+    'Is it ethical to create AI art in a deceased artist\'s style?',
+  ],
+  tech: [
+    'Should social media companies be regulated like utilities?',
+    'Will artificial intelligence eliminate more jobs than it creates?',
+    'Should there be a global ban on autonomous weapons?',
+    'Is the metaverse the future of human connection?',
+    'Should encryption backdoors be required by law?',
+    'Does big tech have too much power over public discourse?',
+    'Is screen time harmful to children?',
+    'Should self-driving cars be held to a higher safety standard than humans?',
+    'Is open-source software better for society than proprietary software?',
+    'Should algorithms be required to be explainable?',
+    'Is cryptocurrency a net positive for the global economy?',
+    'Should facial recognition technology be banned in public spaces?',
+    'Does remote work benefit or harm company culture?',
+    'Should tech companies pay higher taxes on data profits?',
+    'Is space exploration worth the cost?',
+    'Should AI-generated art be eligible for copyright?',
+    'Is digital privacy a right or a privilege?',
+    'Should governments mandate interoperability between platforms?',
+    'Is nuclear energy the best answer to the energy crisis?',
+    'Should there be a global AI development pause?',
+    'Is AI-generated content a threat to creative industries?',
+    'Should children under 13 be legally banned from social media?',
+    'Is tech addiction a legitimate mental health disorder?',
+    'Should employers be allowed to monitor employees\' personal social media?',
+    'Will AI replace doctors within 50 years?',
+    'Should deepfake technology be completely banned?',
+    'Does constant connectivity make us more or less productive?',
+    'Should digital literacy be a mandatory school subject from primary school?',
+  ],
+  philosophy: [
+    'Is free will an illusion?',
+    'Does objective morality exist?',
+    'Is the mind distinct from the brain?',
+    'Can a machine ever be conscious?',
+    'Is nihilism a rational worldview?',
+    'Does God exist?',
+    'Is happiness the ultimate purpose of life?',
+    'Is democracy the best possible form of government?',
+    'Are humans fundamentally good or evil?',
+    'Does personal identity persist through time?',
+    'Is it rational to fear death?',
+    'Can morality exist without religion?',
+    'Is reality fundamentally mental or physical?',
+    'Is true altruism possible?',
+    'Should we prioritize the welfare of future generations over the present?',
+    'Is justice more important than mercy?',
+    'Does the end justify the means?',
+    'Is knowledge possible without experience?',
+    'Should we strive for equality of outcome or equality of opportunity?',
+    'Is language a limitation or an enabler of thought?',
+    'Is modern society too dependent on instant gratification?',
+    'Is forgiveness more for the forgiver than the forgiven?',
+    'Can a person ever truly and fundamentally change?',
+    'Is suffering necessary for personal growth?',
+    'Is silence ever more meaningful than words?',
+    'Is hope rational or irrational?',
+    'Is it better to live a comfortable lie or an uncomfortable truth?',
+    'Does wealth make people less empathetic?',
+  ],
+  politics: [
+    'Should voting be mandatory?',
+    'Is capitalism the best economic system?',
+    'Should the United Nations have more authority over member states?',
+    'Is term limits for politicians beneficial to democracy?',
+    'Should campaign finance be unlimited?',
+    'Is a two-party system a failure of democracy?',
+    'Should the minimum wage be raised significantly?',
+    'Is universal healthcare a human right?',
+    'Should drugs be fully decriminalized?',
+    'Is immigration primarily a net positive for host nations?',
+    'Should the electoral college be abolished?',
+    'Is government censorship ever justified?',
+    'Should nuclear weapons be globally abolished?',
+    'Is economic growth compatible with environmental protection?',
+    'Should prison be focused on rehabilitation or punishment?',
+    'Is the welfare state sustainable long-term?',
+    'Should the voting age be lowered to 16?',
+    'Is it ever ethical for a country to go to war?',
+    'Should government regulate the size of corporations?',
+    'Is globalization good for developing nations?',
+    'Should platforms be required to remove political misinformation?',
+    'Is political correctness doing more harm than good?',
+    'Should climate change education be mandatory in all schools?',
+    'Is nationalism dangerous in a globalised world?',
+    'Should the media be government-funded?',
+    'Is free speech absolute, or should there always be limits?',
+    'Should convicted criminals lose the right to vote?',
+    'Is revolution ever a justified political solution?',
+  ],
+  popculture: [
+    'Do violent video games increase real-world aggression?',
+    'Is cancel culture harmful to free speech?',
+    'Should streaming services invest in original content over licensing?',
+    'Does celebrity culture have a negative impact on society?',
+    'Is reality TV a corrupting influence on values?',
+    'Should athletes be role models?',
+    'Is social media influencer culture harmful to youth?',
+    'Does mainstream music promote negative values?',
+    'Should award shows judge diversity alongside quality?',
+    'Is nostalgia ruining creative industries?',
+    'Has superhero fatigue ruined Hollywood?',
+    'Is fan fiction a legitimate art form?',
+    'Should video games be considered art?',
+    'Does the internet kill local culture?',
+    'Is TikTok harmful to mental health?',
+    'Should online creators be held to higher ethical standards?',
+    'Is the music industry exploiting independent artists?',
+    'Does representation in media actually change society?',
+    'Should sports betting be fully legalized?',
+    'Is binge-watching TV bad for creativity?',
+    'Is K-pop a cultural phenomenon or a product of exploitation?',
+    'Are reboots and remakes destroying original creativity in entertainment?',
+    'Should influencers be required to label AI-edited or filtered photos?',
+    'Is professional gaming a legitimate and sustainable career?',
+    'Does comparing your life to social media influencers harm mental health?',
+    'Has streaming killed the album as an art form?',
+    'Is stan culture toxic?',
+    'Should social media age verification be strictly enforced?',
+  ],
+  business: [
+    'Is a four-day work week productive or counterproductive?',
+    'Should CEOs be paid more than 100x their average employee?',
+    'Is startup culture glamorizing overwork?',
+    'Should companies be required to publish pay scales publicly?',
+    'Is remote work the future of professional employment?',
+    'Should corporations prioritize profit or social responsibility?',
+    'Is gig economy work exploitative?',
+    'Does shareholder primacy harm long-term business health?',
+    'Should non-compete agreements be banned?',
+    'Is entrepreneurship accessible to everyone?',
+    'Should large corporations be broken up to prevent monopolies?',
+    'Is sustainable business always more profitable long-term?',
+    'Should employees have board representation?',
+    'Is personal branding necessary in modern careers?',
+    'Does workplace hierarchy stifle innovation?',
+    'Should companies be allowed to collect employee health data?',
+    'Is networking more important than skill in career success?',
+    'Should unpaid internships be illegal?',
+    'Is advertising manipulation or information?',
+    'Does corporate social responsibility actually help society?',
+    'Should companies be legally required to have diverse leadership teams?',
+    'Is hustle culture ultimately harmful to both individuals and companies?',
+    'Should employees have the legal right to disconnect outside work hours?',
+    'Are performance-based bonuses fair?',
+    'Is radical workplace transparency always a good thing?',
+    'Should large corporations pay a robot tax for replacing human workers with AI?',
+    'Is a shorter work week better for both productivity and wellbeing?',
+    'Should employers be allowed to ask about salary history?',
+  ],
+  lifestyle: [
+    'Should couples split all expenses 50/50?',
+    'Is it ever okay to go through your partner\'s phone?',
+    'Should you tell your partner everything about your past?',
+    'Is jealousy a sign of love or insecurity?',
+    'Do men and women truly understand each other?',
+    'Should couples live together before marriage?',
+    'Is social media destroying modern relationships?',
+    'Are traditional gender roles still relevant today?',
+    'Should work always take priority over relationships?',
+    'Is it healthy to have close friends of the opposite sex when in a relationship?',
+    'Do opposites really attract in the long run?',
+    'Is being single better than being in a bad relationship?',
+    'Should parents be involved in their children\'s romantic choices?',
+    'Is love alone enough to make a relationship last?',
+    'Should age gaps in relationships matter?',
+    'Is forgiveness always necessary after being betrayed?',
+    'Has online dating changed love for better or worse?',
+    'Should men always make the first move?',
+    'Are people today too quick to give up on relationships?',
+    'Is "I\'m too busy" ever a valid excuse for neglecting a relationship?',
+  ],
+};
+
+// Chinese topic database — parallel structure, same index order as TOPICS
+const TOPICS_ZH = {
+  ethics: [
+    '安乐死应该合法化吗？',
+    '死刑在任何情况下都是正当的吗？',
+    '器官捐献应该实行默认同意制吗？',
+    '吃肉在道德上是错误的吗？',
+    '应该允许人类基因增强吗？',
+    '揭发内幕在道德上总是正当的吗？',
+    '富裕国家应该开放边境吗？',
+    '企业追踪员工生产力合乎道德吗？',
+    '公正的社会中应该存在亿万富翁吗？',
+    '公民不服从在某些情况下是道德上必要的吗？',
+    '父母有权以自己的宗教信仰教育孩子吗？',
+    '为了保护他人感情而撒谎是错的吗？',
+    '用于医学研究的动物实验应该被禁止吗？',
+    '平权行动公平吗？',
+    '应该实行全民基本收入吗？',
+    '考虑到气候变化，生育子女在道德上是错误的吗？',
+    '人们应该为网络言论承担现实责任吗？',
+    '爱国主义是美德还是恶德？',
+    '企业应该拥有与个人相同的权利吗？',
+    '隐私比国家安全更重要吗？',
+    '复仇在道德上有正当性吗？',
+    '应该允许人们出售自己的器官吗？',
+    '在亲密关系中隐瞒秘密是否合乎道德？',
+    '正向差异化对待有时候是公平的吗？',
+    '孩子在有独立判断能力前就应该接受宗教教育吗？',
+    '优先照顾自己家人而忽视陌生人的需要是错的吗？',
+    'AI生成的证据可以在法庭上被采纳吗？',
+    '用AI模仿已故艺术家的风格创作艺术合乎道德吗？',
+  ],
+  tech: [
+    '社交媒体公司应该像公用事业一样受到监管吗？',
+    '人工智能最终会消灭比创造更多的就业机会吗？',
+    '应该全球禁止自主武器吗？',
+    '元宇宙是人类连接的未来吗？',
+    '法律应该要求加密后门吗？',
+    '大型科技公司对公共话语拥有太多权力吗？',
+    '屏幕时间对儿童有害吗？',
+    '自动驾驶汽车应该承担比人类更高的安全标准吗？',
+    '开源软件比专有软件对社会更有益吗？',
+    '算法是否应该被要求可解释？',
+    '加密货币对全球经济是净正收益吗？',
+    '公共场所应该禁止人脸识别技术吗？',
+    '远程工作对公司文化有益还是有害？',
+    '科技公司应该对数据利润缴纳更高税款吗？',
+    '太空探索值得如此高昂的成本吗？',
+    'AI生成的艺术是否有资格获得版权保护？',
+    '数字隐私是权利还是特权？',
+    '政府是否应该强制要求平台之间的互操作性？',
+    '核能是解决能源危机的最佳答案吗？',
+    '应该全球暂停AI开发吗？',
+    'AI生成内容是否威胁创意产业？',
+    '13岁以下的孩子应该被法律禁止使用社交媒体吗？',
+    '科技成瘾是真正的心理健康障碍吗？',
+    '雇主有权监控员工的个人社交媒体吗？',
+    '50年内AI会取代医生吗？',
+    'Deepfake技术应该被完全禁止吗？',
+    '持续联网是否让我们更高效还是更低效？',
+    '数字素养应该从小学起成为必修课吗？',
+  ],
+  philosophy: [
+    '自由意志是一种幻觉吗？',
+    '客观道德存在吗？',
+    '意识与大脑是分离的吗？',
+    '机器能拥有意识吗？',
+    '虚无主义是理性的世界观吗？',
+    '上帝存在吗？',
+    '幸福是人生的终极目的吗？',
+    '民主是最好的政府形式吗？',
+    '人类本质上是善还是恶？',
+    '个人身份会随时间持续存在吗？',
+    '害怕死亡是理性的吗？',
+    '道德可以脱离宗教而存在吗？',
+    '现实的本质是精神的还是物质的？',
+    '真正的无私是否可能存在？',
+    '我们应该优先考虑未来几代人的福祉而非当代人吗？',
+    '正义比宽恕更重要吗？',
+    '目的能证明手段的合理性吗？',
+    '没有经验的知识是否可能？',
+    '我们应该追求结果平等还是机会平等？',
+    '语言是思想的限制还是推动力？',
+    '现代社会是否过于依赖即时满足感？',
+    '宽恕更多是为了宽恕者自身吗？',
+    '一个人真的能从根本上改变吗？',
+    '痛苦是个人成长的必要条件吗？',
+    '沉默有时比语言更有力量吗？',
+    '希望是理性的还是非理性的？',
+    '活在舒适的谎言中比活在不舒适的真相中更好吗？',
+    '财富会让人变得更缺乏同理心吗？',
+  ],
+  politics: [
+    '投票应该是强制性的吗？',
+    '资本主义是最好的经济制度吗？',
+    '联合国应该拥有更多对成员国的权力吗？',
+    '政客任期限制对民主有益吗？',
+    '竞选资金应该不受限制吗？',
+    '两党制是民主的失败吗？',
+    '最低工资应该大幅提高吗？',
+    '全民医疗是一项人权吗？',
+    '应该全面去犯罪化毒品吗？',
+    '移民对东道国主要是净正收益吗？',
+    '应该废除选举人团制度吗？',
+    '政府审查在任何情况下都是正当的吗？',
+    '应该全球废除核武器吗？',
+    '经济增长与环境保护兼容吗？',
+    '监狱应该注重改造还是惩罚？',
+    '福利国家长期是否可持续？',
+    '投票年龄应该降低到16岁吗？',
+    '一个国家发动战争在道德上有时候是正当的吗？',
+    '政府应该监管企业规模以防止垄断吗？',
+    '全球化对发展中国家是否有利？',
+    '平台应该被要求删除政治虚假信息吗？',
+    '政治正确已经走得太远了吗？',
+    '气候变化教育应该在所有学校成为必修课吗？',
+    '在全球化的世界里民族主义是危险的吗？',
+    '媒体应该由政府资助吗？',
+    '言论自由是绝对的还是应该有限制？',
+    '被定罪的罪犯应该失去投票权吗？',
+    '革命在任何情况下都是正当的政治解决方案吗？',
+  ],
+  popculture: [
+    '暴力电子游戏会增加现实世界的攻击性吗？',
+    '取消文化对言论自由有害吗？',
+    '流媒体服务应该投资原创内容而不是授权内容吗？',
+    '名人文化对社会有负面影响吗？',
+    '真人秀节目是否腐蚀社会价值观？',
+    '运动员应该成为榜样吗？',
+    '社交媒体网红文化对青少年有害吗？',
+    '主流音乐是否宣扬负面价值观？',
+    '颁奖典礼应该同时考量多样性和质量吗？',
+    '怀旧情结是否正在扼杀创意产业？',
+    '超级英雄热潮是否已经毁了好莱坞？',
+    '同人创作是合法的艺术形式吗？',
+    '电子游戏应该被视为一门艺术吗？',
+    '互联网是否扼杀了地方文化？',
+    'TikTok对心理健康有害吗？',
+    '网络创作者应该承担更高的道德标准吗？',
+    '音乐行业是否剥削独立艺术家？',
+    '媒体中的多元化代表真的能改变社会吗？',
+    '体育博彩应该完全合法化吗？',
+    '刷剧是否对创造力有害？',
+    'K-pop是真正的文化现象还是一种剥削产物？',
+    '翻拍和续集是否正在毁掉娱乐业的原创性？',
+    '网红是否应该被要求标注AI修图或滤镜照片？',
+    '职业电竞是否是一条可持续的职业道路？',
+    '与网红比较生活是否损害心理健康？',
+    '流媒体是否毁掉了专辑作为艺术形式的意义？',
+    '饭圈文化是否有毒？',
+    '社交媒体年龄验证应该严格执行吗？',
+  ],
+  business: [
+    '四天工作周是提高还是降低生产力？',
+    'CEO的薪酬应该超过员工平均工资100倍以上吗？',
+    '创业文化是否美化了过度工作？',
+    '公司是否应该被要求公开薪资等级？',
+    '远程办公是职业就业的未来吗？',
+    '企业应该优先考虑利润还是社会责任？',
+    '零工经济是剥削性的吗？',
+    '股东至上主义是否损害企业的长期健康发展？',
+    '竞业禁止协议应该被禁止吗？',
+    '创业精神是每个人都能做到的吗？',
+    '大型企业应该被拆分以防止垄断吗？',
+    '长期来看可持续商业模式总是更有利可图吗？',
+    '员工是否应该在董事会中有代表权？',
+    '个人品牌在现代职业中是否必要？',
+    '职场等级制度是否扼杀创新？',
+    '公司是否有权收集员工健康数据？',
+    '人际关系网络在职业成功中比技能更重要吗？',
+    '无薪实习应该被法律禁止吗？',
+    '广告是操控还是提供信息？',
+    '企业社会责任真的能帮助社会吗？',
+    '公司是否应该被法律要求拥有多元化的领导团队？',
+    '拼搏文化是否最终对个人和企业都有害？',
+    '员工是否应该拥有在工作时间外断开联系的法定权利？',
+    '绩效奖金公平吗？',
+    '工作场所的彻底透明总是好事吗？',
+    '大型企业是否应该为用AI替代人力缴纳"机器人税"？',
+    '更短的工作周是否对生产力和福祉都更好？',
+    '雇主是否应该被允许询问求职者的薪资历史？',
+  ],
+  lifestyle: [
+    '伴侣之间是否应该严格平摊所有费用？',
+    '查看伴侣手机在任何情况下都是可以的吗？',
+    '你应该把自己所有的过去都告诉伴侣吗？',
+    '嫉妒是爱的表现还是不安全感的体现？',
+    '男性和女性真的能互相理解吗？',
+    '情侣在结婚前应该同居吗？',
+    '社交媒体正在毁掉现代感情关系吗？',
+    '传统性别分工在当今社会还有意义吗？',
+    '工作是否应该永远比感情更优先？',
+    '在恋爱关系中与异性保持密切友谊是否健康？',
+    '"异性相吸"在长期关系中真的成立吗？',
+    '单身比处于一段糟糕的感情中更好吗？',
+    '父母应该参与子女的恋爱选择吗？',
+    '仅凭爱情就足以维持长期关系吗？',
+    '感情中的年龄差距重要吗？',
+    '被背叛后是否必须原谅对方？',
+    '网络恋爱改变了爱情，是往好的方向还是坏的方向？',
+    '男性是否应该永远主动出击？',
+    '现代人是否太快放弃感情关系了？',
+    '"我太忙了"在感情中是否是忽视对方的正当理由？',
+  ],
+};
+
+// ── Topic helpers ────────────────────────────────────────────
+function pickRandomTopic(cat) {
+  const db   = S.language === 'chinese' ? TOPICS_ZH : TOPICS;
+  const cats = (cat && cat !== 'all') ? [cat] : Object.keys(db);
+  const validCats = cats.filter(c => db[c]);
+  if (!validCats.length) return S.language === 'chinese' ? '应该监管人工智能吗？' : 'Should AI be regulated?';
+  const chosenCat = validCats[Math.floor(Math.random() * validCats.length)];
+  const pool      = db[chosenCat];
+  const topic     = pool[Math.floor(Math.random() * pool.length)];
+  S.category      = chosenCat;
+  return topic;
+}
+
+// Wire up random topic button now that TOPICS is defined
+document.getElementById('randomTopicBtn').onclick = () => {
+  const cat = S.category || 'all';
+  S.topic   = pickRandomTopic(cat);
+  const zh  = S.language === 'chinese';
+  const lbl = (CAT_LABELS[S.category] || CAT_LABELS.all)[zh ? 'zh' : 'en'];
+  document.getElementById('topicDisplay').innerHTML =
+    `<span class="cat-badge">${esc(lbl)}</span>${esc(S.topic)}`;
+  // Sync category pill highlight
+  document.getElementById('catPills').querySelectorAll('.cat-pill').forEach(p => {
+    p.classList.toggle('active', p.dataset.cat === (S.category || 'all'));
+  });
+  checkReadyToStart();
+};
+
+// ═══════════════════════════════════════════════════════════
+//  TODO-06 + TODO-07: MATCH SCREEN — timers, gauge, state
+// ═══════════════════════════════════════════════════════════
+
+// ── Match state ──────────────────────────────────────────────
+const M = {
+  gameTimerSecs:  600,   // 10 minutes
+  gameTimerInt:   null,
+  turnTimerSecs:  30,
+  turnTimerInt:   null,
+  currentTurn:    'user',   // 'user' | 'ai'
+  phase:          'idle',   // 'idle'|'user_prep'|'user_record'|'ai_speak'|'judging'|'ko'|'over'
+  starPos:        0.5,      // 0.0 = full AI side, 1.0 = full user side
+  koCount:        0,        // 0–3
+  koAttacker:     null,     // 'user' | 'ai'
+  exchangeNum:    0,
+  aiSpeaking:     false,    // true while AI audio is playing
+  pendingNextTurn:false,    // judge resolved while AI was speaking — defer runTurn
+};
+
+// Voice TTS state (TODO-11 will expand these)
+let _ttsAudio  = null;
+let _ttsAbort  = null;
+let _ttsGen    = 0;
+let _synthGen  = 0;
+
+// MediaRecorder state (TODO-08 will expand)
+let _mediaRecorder = null;
+let _audioChunks   = [];
+let _turnAutoStop  = null;
+
+// ── Gauge animation (TODO-07) ──────────────────────────────
+function setStarPos(pos) {
+  M.starPos = Math.max(0.02, Math.min(0.98, pos));
+  S.starPos = M.starPos;
+  document.getElementById('gaugeStar').style.left = (M.starPos * 100) + '%';
+  checkKnockout();
+}
+
+function animateStar(delta, winner) {
+  // Non-linear shift table: delta 0–5 → star movement %
+  // 0=irrelevant(no move), 1=marginal(5%), 2=moderate(10%),
+  // 3=strong(16%), 4=dominant(23%), 5=devastating(32%)
+  const SHIFTS = [0, 0.05, 0.10, 0.16, 0.23, 0.32];
+  const shift  = SHIFTS[Math.min(Math.max(delta, 0), 5)];
+  if (shift === 0) {
+    toast('📐 Irrelevant — no star movement', 1800);
+    return;
+  }
+  const newPos = winner === 'user' ? M.starPos + shift : M.starPos - shift;
+  setStarPos(newPos);
+
+  // Show score delta chips
+  const chipAi   = document.getElementById('gaugeScoreAi');
+  const chipUser = document.getElementById('gaugeScoreUser');
+  const valAi    = document.getElementById('gaugeScoreAiVal');
+  const valUser  = document.getElementById('gaugeScoreUserVal');
+  if (chipAi && chipUser) {
+    chipAi.classList.remove('visible');
+    chipUser.classList.remove('visible');
+    if (winner === 'user' && chipUser && valUser) {
+      valUser.textContent = '+' + delta;
+      chipUser.classList.add('visible');
+    } else if (winner === 'ai' && chipAi && valAi) {
+      valAi.textContent = '+' + delta;
+      chipAi.classList.add('visible');
+    }
+    setTimeout(() => {
+      if (chipAi)  chipAi.classList.remove('visible');
+      if (chipUser) chipUser.classList.remove('visible');
+    }, 2500);
+  }
+}
+
+function checkKnockout() {
+  const inAiZone   = M.starPos <= 0.15;
+  const inUserZone = M.starPos >= 0.85;
+  const inKO       = inAiZone || inUserZone;
+  const koInd      = document.getElementById('koIndicator');
+
+  if (!inKO) {
+    // Reset knockout count
+    if (M.koCount > 0) {
+      M.koCount    = 0;
+      M.koAttacker = null;
+      updateKoUI();
+    }
+    if (koInd) koInd.style.display = 'none';
+  } else {
+    if (koInd) koInd.style.display = 'flex';
+    if (M.koAttacker === null) {
+      M.koAttacker = inUserZone ? 'user' : 'ai'; // attacker is the one whose zone the star is NOT in
+      // Actually: user zone = user is attacking (star pushed to user side)
+      M.koAttacker = inUserZone ? 'user' : 'ai';
+    }
+  }
+}
+
+function updateKoUI() {
+  for (let i = 1; i <= 3; i++) {
+    const dot = document.getElementById('koDot' + i);
+    if (dot) dot.classList.toggle('filled', i <= M.koCount);
+  }
+  const lbl = document.getElementById('koLabel');
+  if (lbl) lbl.style.display = M.koCount > 0 ? '' : 'none';
+  const ind = document.getElementById('koIndicator');
+  if (ind) ind.style.display = M.koCount > 0 ? 'flex' : 'none';
+}
+
+// ── Game timer (10 min) ────────────────────────────────────
+function startGameTimer() {
+  M.gameTimerSecs = 600;
+  clearInterval(M.gameTimerInt);
+  M.gameTimerInt = setInterval(() => {
+    M.gameTimerSecs--;
+    updateGameTimerUI();
+    if (M.gameTimerSecs <= 0) {
+      clearInterval(M.gameTimerInt);
+      endMatchByTimer();
+    }
+  }, 1000);
+  updateGameTimerUI();
+}
+
+function updateGameTimerUI() {
+  const secs  = Math.max(0, M.gameTimerSecs);
+  const m     = Math.floor(secs / 60);
+  const s     = secs % 60;
+  const label = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  const el    = document.getElementById('gameTimer');
+  if (el) {
+    el.textContent = label;
+    el.classList.toggle('warn', secs <= 60);
+  }
+}
+
+// ── Turn timer (30 sec per turn) ───────────────────────────
+function startTurnTimer(onExpire) {
+  M.turnTimerSecs = 30;
+  clearInterval(M.turnTimerInt);
+  updateTurnTimerUI();
+  M.turnTimerInt = setInterval(() => {
+    M.turnTimerSecs--;
+    updateTurnTimerUI();
+    if (M.turnTimerSecs <= 0) {
+      clearInterval(M.turnTimerInt);
+      if (typeof onExpire === 'function') onExpire();
+    }
+  }, 1000);
+}
+
+function stopTurnTimer() {
+  clearInterval(M.turnTimerInt);
+  M.turnTimerInt = null;
+}
+
+function updateTurnTimerUI() {
+  const secs = Math.max(0, M.turnTimerSecs);
+  const pct  = (secs / 30) * 100;
+  const bar  = document.getElementById('turnTimerBar');
+  const sec  = document.getElementById('turnTimerSecs');
+  if (bar) {
+    bar.style.width = pct + '%';
+    bar.className = 'turn-timer-bar' +
+      (secs <= 5 ? ' danger' : secs <= 10 ? ' warn' : '');
+  }
+  if (sec) sec.textContent = secs + 's';
+}
+
+// ── Turn banner helper ─────────────────────────────────────
+function setTurnBanner(text, cls) {
+  const el = document.getElementById('turnBanner');
+  if (el) { el.textContent = text; el.className = 'turn-banner ' + (cls || ''); }
+  // Sync bottom-bar turn badge
+  const badge = document.getElementById('mbbTurnBadge');
+  if (badge) {
+    badge.className = 'mbb-turn-badge';
+    if (cls === 'user-turn')       { badge.classList.add('your-turn');  badge.textContent = '🎤 Your Turn'; }
+    else if (cls === 'ai-turn')    { badge.classList.add('ai-turn');    badge.textContent = '🤖 AI Turn'; }
+    else if (cls === 'judge-turn') { badge.classList.add('judge-turn'); badge.textContent = '⚖️ Judging…'; }
+    else { badge.textContent = '–'; }
+  }
+}
+
+// ── Match status bar helper ────────────────────────────────
+function setMatchStatus(text, dotState) {
+  const dot  = document.getElementById('matchStatusDot');
+  const span = document.getElementById('matchStatusText');
+  const wave = document.getElementById('matchListeningWave');
+  if (dot)  dot.className  = dotState || '';
+  if (span) span.textContent = text;
+  if (wave) wave.classList.toggle('on', dotState === 'listening');
+}
+
+// ── Set card badge ─────────────────────────────────────────
+function setCardBadge(who, state) {
+  const id   = who === 'user' ? 'userBadge' : 'aiBadge';
+  const el   = document.getElementById(id);
+  if (!el) return;
+  const labels = {
+    recording:  'Recording',
+    processing: 'Thinking…',
+    speaking:   'Speaking',
+    done:       '✓ Done',
+    wait:       'Waiting…',
+  };
+  el.textContent = labels[state] || state;
+  el.className   = 'stmt-badge ' + (state === 'done' || state === 'wait' ? 'done' : state);
+}
+
+// ── Set card text ──────────────────────────────────────────
+function setCardText(who, html) {
+  const id = who === 'user' ? 'userText' : 'aiText';
+  const el = document.getElementById(id);
+  if (el) el.innerHTML = html;
+}
+
+// ── Stance label helpers ───────────────────────────────────
+// Show the 正方/反方 side tag immediately (placeholder text) so the user
+// can see their side as soon as the match starts, before GPT responds.
+function _initStancePlaceholders() {
+  const userIsFor = S.userSide === '正方';
+  const aiEl   = document.getElementById('aiStance');
+  const userEl = document.getElementById('userStance');
+  if (aiEl) {
+    aiEl.textContent     = userIsFor ? '反方 — Against the proposition' : '正方 — For the proposition';
+    aiEl.className       = 'stmt-stance ' + (userIsFor ? 'against' : 'for');
+    aiEl.style.display   = 'block';
+  }
+  if (userEl) {
+    userEl.textContent   = userIsFor ? '正方 — For the proposition' : '反方 — Against the proposition';
+    userEl.className     = 'stmt-stance ' + (userIsFor ? 'for' : 'against');
+    userEl.style.display = 'block';
+  }
+}
+
+// Update stance labels with GPT-generated natural-language positions.
+function setStanceUI() {
+  if (!S.forStance || !S.againstStance) return;
+  const userIsFor      = S.userSide === '正方';
+  const userStanceText = userIsFor ? S.forStance     : S.againstStance;
+  const aiStanceText   = userIsFor ? S.againstStance : S.forStance;
+  const userEl = document.getElementById('userStance');
+  const aiEl   = document.getElementById('aiStance');
+  if (userEl) {
+    userEl.textContent   = `${S.userSide} — ${userStanceText}`;
+    userEl.className     = 'stmt-stance ' + (userIsFor ? 'for' : 'against');
+    userEl.style.display = 'block';
+  }
+  if (aiEl) {
+    aiEl.textContent   = `${S.aiSide} — ${aiStanceText}`;
+    aiEl.className     = 'stmt-stance ' + (userIsFor ? 'against' : 'for');
+    aiEl.style.display = 'block';
+  }
+}
+
+async function generateStanceLabels() {
+  if (!S.apiKey || !S.topic) return;
+  const isChinese = S.language === 'chinese';
+  const lang = isChinese ? 'Chinese (Mandarin)' : 'English';
+  try {
+    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method:'POST',
+      headers:{ 'Authorization':'Bearer '+S.apiKey, 'Content-Type':'application/json' },
+      body: JSON.stringify({
+        model:'gpt-4o',
+        messages:[
+          { role:'system', content:
+            `For a debate topic, write two short position statements (max 12 words each) in ${lang}.\n` +
+            `FOR side (正方): state what they are arguing as true.\n` +
+            `AGAINST side (反方): state what they are arguing as true (the opposite view).\n` +
+            `Return ONLY valid JSON: {"for": "...", "against": "..."}`
+          },
+          { role:'user', content:`Topic: "${S.topic}"` },
+        ],
+        max_tokens:80, temperature:0.2,
+        response_format:{ type:'json_object' },
+      }),
+    });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    let result;
+    try { result = JSON.parse(data.choices?.[0]?.message?.content || '{}'); } catch { result = {}; }
+    if (result.for && result.against) {
+      S.forStance     = result.for;
+      S.againstStance = result.against;
+      setStanceUI();
+    }
+  } catch { /* silent — placeholder text remains */ }
+}
+
+// ── Match initializer (called after RPS) ──────────────────
+function matchStart() {
+  // Populate UI
+  document.getElementById('matchTopicLabel').textContent = S.topic || '—';
+  const _pt = document.getElementById('panelTopicText'); if(_pt) _pt.textContent = S.topic || '—';
+  document.getElementById('aiName').textContent =
+    S.mode === 'multiplayer' ? 'Opponent\'s Response' : `Opponent's Response`;
+
+  // Reset state
+  M.gameTimerSecs = 600;
+  M.starPos       = 0.5;
+  M.koCount       = 0;
+  M.koAttacker    = null;
+  M.exchangeNum   = 0;
+  M.phase         = 'idle';
+  M.aiSpeaking    = false;
+  M.pendingNextTurn = false;
+  S.exchanges     = [];
+  S.userSide = S.firstSpeaker === 'user' ? '正方' : '反方';
+  S.aiSide   = S.firstSpeaker === 'user' ? '反方' : '正方';
+
+  // Show side placeholders immediately, then fetch natural-language stance labels
+  S.forStance     = '';
+  S.againstStance = '';
+  _initStancePlaceholders();
+  generateStanceLabels();  // non-blocking — updates UI when GPT responds
+
+  setStarPos(0.5);
+  updateKoUI();
+  updateTurnTimerUI();
+  updateGameTimerUI();
+
+  // Reset cards
+  setCardText('ai',   '<span class="placeholder">Opponent\'s statement will appear here…</span>');
+  setCardText('user', '<span class="placeholder">Your statement will appear here…</span>');
+  setCardBadge('ai',   'wait');
+  setCardBadge('user', 'wait');
+  document.getElementById('judgeStrip').style.display = 'none';
+  document.getElementById('micBtn').classList.remove('hidden');
+  document.getElementById('micBtn').disabled = true;
+  hideCoachHint();
+
+  startGameTimer();
+  // Start the first turn
+  runTurn(S.firstSpeaker);
+}
+
+// P2-only lightweight match init: reset UI state but NO timer, NO runTurn
+function mpMatchInit_P2() {
+  document.getElementById('matchTopicLabel').textContent = S.topic || '—';
+  const _pt2 = document.getElementById('panelTopicText'); if(_pt2) _pt2.textContent = S.topic || '—';
+  document.getElementById('aiName').textContent = 'Opponent\'s Response';
+  M.gameTimerSecs = 600;
+  M.starPos       = 0.5;
+  M.koCount       = 0;
+  M.koAttacker    = null;
+  M.exchangeNum   = 0;
+  M.phase         = 'idle';
+  S.exchanges     = [];
+  setStarPos(0.5);
+  updateKoUI();
+  updateTurnTimerUI();
+  updateGameTimerUI();
+  setCardText('ai',   '<span class="placeholder">Opponent\'s statement will appear here…</span>');
+  setCardText('user', '<span class="placeholder">Your statement will appear here…</span>');
+  setCardBadge('ai',   'wait');
+  setCardBadge('user', 'wait');
+  document.getElementById('judgeStrip').style.display = 'none';
+  document.getElementById('micBtn').classList.remove('hidden');
+  document.getElementById('micBtn').disabled = true;
+  // P2 state is driven entirely by P1's state broadcasts from here on
+}
+
+// ── Quit to settings (safe teardown from any game state) ────
+function quitToSettings() {
+  // Kill all in-progress game activity immediately
+  M.phase = 'over';                          // block any async callbacks from continuing
+  M.aiSpeaking     = false;
+  M.pendingNextTurn = false;
+  clearInterval(M.gameTimerInt);
+  stopTurnTimer();
+  stopSpeaking();
+  // Stop microphone recording and release tracks
+  if (_mediaRecorder && _mediaRecorder.state !== 'inactive') {
+    _mediaRecorder.onstop = () => { try { _mediaRecorder.stream?.getTracks().forEach(t => t.stop()); } catch(_){} };
+    _mediaRecorder.stop();
+  }
+  hideVoiceOverlay();
+  hideCoachHint();
+  // Tear down multiplayer connection if active
+  if (mp.active) {
+    mp.active = false; mp.role = null;
+    if (mp.peer && !mp.peer.destroyed) { try { mp.peer.destroy(); } catch(_){} mp.peer = null; }
+    if (mp.conn) { try { mp.conn.close(); } catch(_){} mp.conn = null; }
+  }
+  S.gamePhase = 'idle';
+  showScreen('screen-config');
+}
+
+function endMatchByTimer() {
+  // Tiebreaker: star position decides winner
+  M.phase = 'over';
+  stopTurnTimer();
+  stopSpeaking();
+  if (_mediaRecorder && _mediaRecorder.state !== 'inactive') {
+    _mediaRecorder.stop();
+  }
+  const winner = M.starPos >= 0.5 ? 'user' : 'ai';
+  endMatch(winner, 'time');
+}
+
+function endMatch(winner, reason) {
+  M.phase = 'over';
+  clearInterval(M.gameTimerInt);
+  stopTurnTimer();
+  // BUG-06 fix: stop any in-progress TTS and microphone recording
+  stopSpeaking();
+  if (_mediaRecorder && _mediaRecorder.state !== 'inactive') {
+    _mediaRecorder.onstop = () => { try { _mediaRecorder.stream?.getTracks().forEach(t => t.stop()); } catch(_){} };
+    _mediaRecorder.stop();
+  }
+  hideVoiceOverlay();
+  S.gamePhase = 'postmatch';
+  // Store result for post-match screen (TODO-15)
+  S.matchResult = { winner, reason, starPos: M.starPos };
+  // Navigate to post-match (TODO-15 will flesh this out)
+  setTimeout(() => {
+    showScreen('screen-postmatch');
+    if (typeof postMatchStart === 'function') postMatchStart();
+  }, 600);
+}
+
+// ── Turn runner (orchestrates the debate flow) ────────────
+function runTurn(speaker) {
+  M.currentTurn = speaker;
+  M.phase       = speaker === 'user' ? 'user_prep' : 'ai_speak';
+
+  if (speaker === 'user') {
+    setTurnBanner('🎤 YOUR TURN — Press mic to speak (30s)', 'user-turn');
+    setCardBadge('user', 'wait');
+    setMatchStatus('Tap 🎤 to record your argument', '');
+    document.getElementById('micBtn').disabled = false;
+
+    // Show coach hint if coaching is enabled and AI spoke last
+    const lastEx = S.exchanges.length ? S.exchanges[S.exchanges.length - 1] : null;
+    const lastAiText = lastEx ? lastEx.aiText || '' : '';
+    if (S.coaching && lastAiText && typeof callCoach === 'function') {
+      callCoach(lastAiText); // non-blocking — displays overlay when ready
+    }
+
+    // Start 30-sec turn timer (auto-skip if no input)
+    startTurnTimer(() => {
+      if (M.phase === 'user_prep' || M.phase === 'user_record') {
+        toast('Time\'s up! Turn skipped.');
+        stopVoiceCapture(false);
+        afterUserSpeaks('');
+      }
+    });
+
+  } else {
+    // AI turn
+    setTurnBanner('🤖 AI\'s TURN — Generating response…', 'ai-turn');
+    setCardBadge('ai', 'processing');
+    setMatchStatus('AI is crafting a response…', 'processing');
+    document.getElementById('micBtn').disabled = true;
+    // BUG-05 fix: do NOT run turn timer for AI — GPT has no fixed 30s limit
+    // and showing a red "expired" bar while waiting for the API is misleading.
+    updateTurnTimerUI(); // reset bar to full green
+
+    // Call AI opponent (TODO-10 will wire GPT; for now placeholder)
+    if (typeof callOpponent === 'function') {
+      const lastUserText = S.exchanges.length
+        ? S.exchanges[S.exchanges.length - 1].userText || ''
+        : '';
+      callOpponent(lastUserText);
+    } else {
+      // Stub: simulate AI response
+      setTimeout(() => afterAiSpeaks('[AI response pending — TODO-10]'), 1200);
+    }
+  }
+}
+
+// Called when user finishes recording (TODO-08/09 will invoke this)
+function afterUserSpeaks(transcript) {
+  if (M.phase === 'over') return;  // game ended (quit or timer)
+  stopTurnTimer();
+  document.getElementById('micBtn').disabled = true;
+  setCardBadge('user', 'done');
+  // Treat empty/timeout as '(skipped)' so checkAndJudge can still fire
+  // and the judge can correctly award points to AI for the unanswered exchange.
+  const storedText = transcript || '(skipped)';
+  if (transcript) {
+    setCardText('user', esc(transcript).replace(/\n/g,'<br>'));
+  } else {
+    setCardText('user', '<span class="placeholder" style="color:#f08080">⏱ Turn skipped — no statement given</span>');
+  }
+
+  if (!S.exchanges[M.exchangeNum]) S.exchanges[M.exchangeNum] = {};
+  S.exchanges[M.exchangeNum].userText = storedText;
+
+  // Text-based trigger: if AI text already exists → judge now
+  // Otherwise run AI turn (AI will store its text, then checkAndJudge fires)
+  if (S.exchanges[M.exchangeNum].aiText) {
+    M.phase = 'judging';
+    checkAndJudge();
+  } else {
+    M.phase = 'ai_speak';
+    setTimeout(() => runTurn('ai'), 600);
+  }
+}
+
+// Called when AI finishes speaking (or is interrupted)
+// Only responsible for the OPENING case: if user hasn't spoken yet, start their turn.
+// Judging is handled by checkAndJudge() which fires as soon as aiText is stored.
+function afterAiSpeaks(aiText) {
+  if (M.phase === 'over') return;
+  if (!S.exchanges[M.exchangeNum]) S.exchanges[M.exchangeNum] = {};
+  if (S.exchanges[M.exchangeNum].aiSpeakDone) return;  // prevent double-run
+  S.exchanges[M.exchangeNum].aiSpeakDone = true;
+
+  setCardBadge('ai', 'done');
+  // If user hasn't spoken yet — this was an opening statement, hand over to user
+  if (!S.exchanges[M.exchangeNum].userText) {
+    runTurn('user');
+  }
+  // If userText already exists, checkAndJudge() already fired when aiText was stored
+}
+
+// Called after judge returns result (TODO-12 will invoke this)
+function afterJudge(result) {
+  if (M.phase === 'over') return;  // game ended (quit or timer)
+  const { winner, delta, reason } = result;
+
+  // Show judge reason
+  const strip = document.getElementById('judgeStrip');
+  if (strip) {
+    strip.style.display = '';
+    document.getElementById('judgeReason').textContent = reason || '—';
+  }
+
+  // Animate star
+  animateStar(delta, winner);
+
+  // Store in exchange log
+  if (S.exchanges[M.exchangeNum]) {
+    S.exchanges[M.exchangeNum].judgeWinner = winner;
+    S.exchanges[M.exchangeNum].judgeDelta  = delta;
+    S.exchanges[M.exchangeNum].judgeReason = reason;
+    S.exchanges[M.exchangeNum].starPos     = M.starPos;
+  }
+
+  M.exchangeNum++;
+  setMatchStatus('Exchange complete. Get ready…', '');
+
+  // Check win conditions after star animation (TODO-14)
+  setTimeout(() => {
+    if (M.phase === 'over') return;
+    if (M.aiSpeaking) {
+      // AI is still speaking its response — defer until audio finishes
+      M.pendingNextTurn = true;
+      return;
+    }
+    handleKnockoutLogic();
+  }, 900);
+}
+
+// Text-based judge trigger — called whenever user or AI text is stored.
+// Judges as soon as BOTH sides have text for the current exchange,
+// regardless of whether speaking has finished.
+function checkAndJudge() {
+  if (M.phase === 'over') return;
+  const ex = S.exchanges[M.exchangeNum];
+  if (!ex || ex.judgeTriggered) return;  // already judging or judged
+  if (!ex.userText || !ex.aiText)  return;  // need both sides
+  ex.judgeTriggered = true;
+  M.phase = 'judging';
+  document.getElementById('micBtn').disabled = true;
+  setTurnBanner('⚖️ JUDGE EVALUATING…', 'judge-turn');
+  setMatchStatus('Judge is evaluating the exchange…', 'processing');
+  if (typeof callJudge === 'function') callJudge(ex.userText, ex.aiText);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TODO-14: KNOCKOUT SEQUENCE
+// ═══════════════════════════════════════════════════════════
+// koTurnType: 'defense' | 'securing'
+// koTurnNum: 1, 2 (for defense), 1, 2 (for securing), 3 (final defense)
+// Sequence: D1 → S1 → D2 → S2 → D3 → (if still in zone → attacker wins)
+
+function handleKnockoutLogic() {
+  const inAiZone   = M.starPos <= 0.15;
+  const inUserZone = M.starPos >= 0.85;
+  const inKO       = inAiZone || inUserZone;
+
+  if (!inKO) {
+    // Star exited red zone — reset knockout count
+    if (M.koCount > 0) {
+      const lastAttacker = M.koAttacker; // capture before reset
+      M.koCount    = 0;
+      M.koAttacker = null;
+      updateKoUI();
+      document.getElementById('koIndicator').style.display = 'none';
+      toast('⭐ Star escaped! Knockout reset.');
+      // Attacker continues pressing; defender successfully escaped
+      runTurn(lastAttacker === 'ai' ? 'ai' : 'user');
+    } else {
+      runTurn('user');
+    }
+    return;
+  }
+
+  // Star is in red zone
+  if (M.koAttacker === null) {
+    // Fresh KO start: determine attacker (whoever pushed star into that zone)
+    M.koAttacker = inUserZone ? 'user' : 'ai';
+    M.koCount    = 0;
+  }
+  const defender = M.koAttacker === 'user' ? 'ai' : 'user';
+
+  M.koCount++;
+  updateKoUI();
+
+  if (M.koCount > 3) {
+    // Defender failed all 3 defenses → attacker wins
+    endMatch(M.koAttacker, 'knockout');
+    return;
+  }
+
+  // Show KO banner
+  const koMsgs = {
+    1: `💥 KNOCKOUT! ${M.koAttacker === 'user' ? 'AI' : 'You'} must defend! (${M.koCount}/3)`,
+    2: `💥 STILL IN THE RED ZONE! Defend again! (${M.koCount}/3)`,
+    3: `💥 FINAL DEFENSE! Last chance! (${M.koCount}/3)`,
+  };
+  setTurnBanner(koMsgs[M.koCount] || `💥 KNOCKOUT! (${M.koCount}/3)`, 'judge-turn');
+  M.phase = 'ko';
+
+  // Next turn: defender defends first
+  setTimeout(() => runTurn(defender), 800);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TODO-08: VOICE RECORDING  (MediaRecorder)
+// ═══════════════════════════════════════════════════════════
+
+function ensureVoiceOverlay() {
+  if (document.getElementById('voiceStopOverlay')) return;
+  const el = document.createElement('div');
+  el.id = 'voiceStopOverlay';
+  el.style.cssText =
+    'position:fixed;inset:0;z-index:400;background:rgba(6,8,15,.92);' +
+    'border:2px solid var(--green);box-shadow:0 0 30px var(--green-glow);' +
+    'display:none;flex-direction:column;align-items:center;justify-content:center;' +
+    'gap:12px;cursor:pointer;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);' +
+    'animation:micPulse 1.6s ease-in-out infinite;touch-action:manipulation;';
+  el.innerHTML =
+    `<div style="display:flex;align-items:center;gap:3px;height:28px">
+       <span style="display:block;width:3px;background:var(--green);border-radius:2px;animation:lwBar .88s ease-in-out infinite"></span>
+       <span style="display:block;width:3px;background:var(--green);border-radius:2px;animation:lwBar .88s ease-in-out .09s infinite"></span>
+       <span style="display:block;width:3px;background:var(--green);border-radius:2px;animation:lwBar .88s ease-in-out .18s infinite"></span>
+       <span style="display:block;width:3px;background:var(--green);border-radius:2px;animation:lwBar .88s ease-in-out .27s infinite"></span>
+       <span style="display:block;width:3px;background:var(--green);border-radius:2px;animation:lwBar .88s ease-in-out .36s infinite"></span>
+     </div>
+     <div style="font-size:18px;font-weight:800;color:var(--green)">Tap to Stop &amp; Submit</div>
+     <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">Recording your argument…</div>
+     <button id="voiceCancelBtn" style="margin-top:4px;padding:5px 16px;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.07);color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;touch-action:manipulation;">✕ Cancel</button>`;
+  document.body.appendChild(el);
+  el.addEventListener('click', (e) => {
+    if (e.target.closest('#voiceCancelBtn')) return;
+    stopVoiceCapture(false);
+  });
+  document.getElementById('voiceCancelBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    stopVoiceCapture(true);
+  });
+}
+function showVoiceOverlay() { ensureVoiceOverlay(); document.getElementById('voiceStopOverlay').style.display='flex'; }
+function hideVoiceOverlay() { const e=document.getElementById('voiceStopOverlay'); if(e) e.style.display='none'; }
+
+async function startVoiceCapture() {
+  if (_mediaRecorder && _mediaRecorder.state !== 'inactive') return;
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch { toast('Microphone access denied'); return; }
+
+  _audioChunks = [];
+  M.phase = 'user_record';
+  setCardBadge('user', 'recording');
+  setMatchStatus('Recording… tap the screen to stop', 'listening');
+  document.getElementById('micBtn').classList.add('recording');
+  hideCoachHint();
+  showVoiceOverlay();
+
+  const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4']
+    .find(t => MediaRecorder.isTypeSupported(t)) || '';
+  _mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+  _mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) _audioChunks.push(e.data); };
+  _mediaRecorder.onstop = async () => {
+    hideVoiceOverlay();
+    document.getElementById('micBtn').classList.remove('recording');
+    document.getElementById('micBtn').disabled = true;
+    try { stream.getTracks().forEach(t => t.stop()); } catch(_){}
+    const blob = new Blob(_audioChunks, { type: _mediaRecorder.mimeType || 'audio/webm' });
+    _audioChunks = [];
+    if (blob.size < 1500) { setMatchStatus('No speech detected — turn skipped',''); afterUserSpeaks(''); return; }
+    setCardBadge('user','processing');
+    setMatchStatus('Transcribing speech…','processing');
+    try {
+      const transcript = await transcribeAudio(blob);
+      if (!transcript.trim()) throw new Error('No speech detected');
+      setMatchStatus('Transcription done','');
+      afterUserSpeaks(transcript);
+    } catch(err) { toast('Transcription error: '+err.message,4000); afterUserSpeaks(''); }
+  };
+  _mediaRecorder.start();
+}
+
+function stopVoiceCapture(cancel) {
+  hideVoiceOverlay();
+  clearTimeout(_turnAutoStop);
+  const mr = _mediaRecorder;
+  document.getElementById('micBtn').classList.remove('recording');
+  if (cancel) {
+    _audioChunks = [];
+    if (mr && mr.state !== 'inactive') {
+      mr.onstop = () => { try { mr.stream?.getTracks().forEach(t=>t.stop()); } catch(_){} };
+      mr.stop();
+    }
+    M.phase = 'user_prep';
+    setCardBadge('user','wait');
+    setMatchStatus('Recording cancelled. Tap 🎤 to try again.','');
+    document.getElementById('micBtn').disabled = false;
+    toast('Recording cancelled');
+    return;
+  }
+  if (mr && mr.state !== 'inactive') mr.stop();
+}
+
+document.getElementById('micBtn').addEventListener('click', () => {
+  if (M.phase === 'user_prep')   startVoiceCapture();
+  else if (M.phase === 'user_record') stopVoiceCapture(false);
+});
+
+// ═══════════════════════════════════════════════════════════
+//  TODO-09: WHISPER TRANSCRIPTION
+// ═══════════════════════════════════════════════════════════
+async function transcribeAudio(blob) {
+  const ext  = blob.type.includes('mp4') ? 'mp4' : blob.type.includes('ogg') ? 'ogg' : 'webm';
+  const form = new FormData();
+  form.append('file', blob, `audio.${ext}`);
+  form.append('model', 'whisper-1');
+  // FIX-02: force transcription language to match the user's language selection
+  // This prevents Whisper from auto-detecting Malay/other languages on mixed speech
+  const whisperLang = S.language === 'chinese' ? 'zh' : 'en';
+  form.append('language', whisperLang);
+  const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method:'POST', headers:{ 'Authorization':'Bearer '+S.apiKey }, body:form,
+  });
+  if (!resp.ok) {
+    let e='HTTP '+resp.status;
+    try { const j=await resp.json(); e=j.error?.message||e; } catch{}
+    throw new Error(e);
+  }
+  const data = await resp.json();
+  return data.text?.trim() || '';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TODO-10: AI OPPONENT  (GPT-4o)
+// ═══════════════════════════════════════════════════════════
+const PERSONA_INSTRUCTIONS = {
+  default:     'You are a sharp, articulate debater.',
+  lawyer:      'You are a skilled trial lawyer who argues with precision, precedent, and persuasion.',
+  philosopher: 'You are a philosopher who probes assumptions and argues from first principles.',
+  politician:  'You are a charismatic politician who frames arguments around public good and policy.',
+  devil:       'You are a Devil\'s Advocate who challenges every position, even ones you privately agree with.',
+};
+const TONE_INSTRUCTIONS = {
+  harsh:       'Your tone is blunt, aggressive, and uncompromising.',
+  casual:      'Your tone is conversational, friendly, and relatable.',
+  professional:'Your tone is polished, measured, and authoritative.',
+};
+const DIFFICULTY_INSTRUCTIONS = {
+  easy:   'Use simple arguments and be forgiving in your rebuttals.',
+  medium: 'Present solid, well-structured arguments.',
+  hard:   'Argue rigorously with evidence, logic, and clever counter-points.',
+  expert: 'Debate at the highest level — use sophisticated rhetoric, anticipate counter-arguments, and exploit weaknesses in your opponent\'s position.',
+};
+
+async function callOpponent(userText) {
+  if (!S.apiKey) { afterAiSpeaks('[API key required]'); return; }
+
+  // Side assignment comes from RPS: winner is 正方 (FOR), loser is 反方 (AGAINST)
+  const isChinese  = S.language === 'chinese';
+  const aiIsFor    = S.aiSide === '正方';
+  const aiSideZh   = aiIsFor ? '正方（支持命题）' : '反方（反对命题）';
+  const aiSideEn   = aiIsFor ? 'FOR (supporting the proposition)' : 'AGAINST (opposing the proposition)';
+  const userSideZh = aiIsFor ? '反方（反对命题）' : '正方（支持命题）';
+  const userSideEn = aiIsFor ? 'AGAINST (opposing the proposition)' : 'FOR (supporting the proposition)';
+  const aiSideLabel   = isChinese ? aiSideZh   : aiSideEn;
+  const userSideLabel = isChinese ? userSideZh : userSideEn;
+
+  const systemPrompt =
+    `${PERSONA_INSTRUCTIONS[S.persona]||PERSONA_INSTRUCTIONS.default} ` +
+    `${TONE_INSTRUCTIONS[S.tone]||TONE_INSTRUCTIONS.professional} ` +
+    `${DIFFICULTY_INSTRUCTIONS[S.difficulty]||DIFFICULTY_INSTRUCTIONS.medium}\n` +
+    (isChinese ? '用中文（普通话）回应。\n' : 'Respond in English.\n') +
+    `Debate topic: "${S.topic}".\n\n` +
+    `YOUR FIXED POSITION: ${aiSideLabel} (${S.aiSide}). This NEVER changes, no matter what your opponent says.\n` +
+    `Your opponent (the human) is arguing ${userSideLabel} (${S.userSide}).\n\n` +
+    `STRICT DEBATE RULES — follow all of these:\n` +
+    `1. ALWAYS defend the ${aiSideLabel} stance. Never waver, never agree with your opponent.\n` +
+    `2. Every argument you make must support your own side. Never accidentally argue for your opponent's position.\n` +
+    `3. If your opponent's statement is IRRELEVANT, NONSENSICAL, OFF-TOPIC, or incoherent:\n` +
+    `   — Expose the irrelevance directly (e.g. "That point has nothing to do with the topic.")\n` +
+    `   — Then pivot immediately to make a sharp ${aiSideLabel} argument.\n` +
+    `4. Begin by directly REBUTTING your opponent's specific claim, then advance your own point.\n` +
+    `5. Use concrete reasoning: facts, logic, counter-examples — never vague assertions.\n` +
+    `6. Maximum 4 sentences. Be sharp, direct, and decisive.\n` +
+    `Output ONLY your spoken argument — no labels, no quotes, no preamble.`;
+
+  const prevEx = S.exchanges.slice(-3).map((ex,i) =>
+    `Exchange ${i+1}:\nHuman (${S.userSide}): ${ex.userText||'(skipped)'}\nAI (${S.aiSide}): ${ex.aiText||'(skipped)'}`
+  ).join('\n\n');
+  const messages = [];
+  if (prevEx) {
+    messages.push({ role:'user', content:'Previous exchanges:\n'+prevEx });
+    messages.push({ role:'assistant', content:`Understood. I will maintain my ${aiSideLabel} (${S.aiSide}) position throughout.` });
+  }
+  messages.push({
+    role:'user',
+    content: userText
+      ? `Opponent (${S.userSide}) just said: "${userText}"\nChallenge this and advance your ${aiSideLabel} argument.`
+      : `Open the debate on "${S.topic}" with a strong ${aiSideLabel} opening argument.`,
+  });
+
+  try {
+    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method:'POST',
+      headers:{ 'Authorization':'Bearer '+S.apiKey, 'Content-Type':'application/json' },
+      body: JSON.stringify({ model:'gpt-4o', messages:[{role:'system',content:systemPrompt},...messages], max_tokens:200, temperature:0.78 }),
+    });
+    if (!resp.ok) { let e='HTTP '+resp.status; try{const j=await resp.json();e=j.error?.message||e;}catch{} throw new Error(e); }
+    const data = await resp.json();
+    const text = data.choices?.[0]?.message?.content?.trim() || '';
+    if (!text) throw new Error('Empty AI response');
+    // Store AI text in exchange BEFORE speaking — stop button needs it to advance flow
+    if (!S.exchanges[M.exchangeNum]) S.exchanges[M.exchangeNum] = {};
+    S.exchanges[M.exchangeNum].aiText      = text;
+    S.exchanges[M.exchangeNum].aiSpeakDone  = false;
+    setCardBadge('ai','speaking');
+    setCardText('ai', esc(text).replace(/\n/g,'<br>'));
+    setMatchStatus('AI is speaking…','speaking');
+    checkAndJudge();  // text-based trigger: judge immediately if user text already exists
+    M.aiSpeaking = true;
+    await speak(text);
+    M.aiSpeaking = false;
+    afterAiSpeaks(text);  // handles opening → user turn if needed
+    // If judge resolved while we were speaking, advance now that audio is done
+    if (M.pendingNextTurn && M.phase !== 'over') {
+      M.pendingNextTurn = false;
+      setTimeout(() => { if (M.phase !== 'over') handleKnockoutLogic(); }, 200);
+    }
+  } catch(err) { toast('AI error: '+err.message,4000); M.aiSpeaking = false; afterAiSpeaks('[AI error: '+err.message+']'); }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TODO-11: TTS PLAYBACK  (OpenAI tts-1 + browser fallback)
+// ═══════════════════════════════════════════════════════════
+const TTS_VOICE_MAP = { robot:'alloy', real:'nova', person:'shimmer' };
+
+async function speak(text) {
+  const gen = ++_ttsGen;
+  if (_ttsAbort) { _ttsAbort.abort(); _ttsAbort=null; }
+  if (_ttsAudio)  { _ttsAudio.pause(); _ttsAudio.src=''; _ttsAudio=null; }
+  if (!S.apiKey) { return speakQuick(text); }  // await browser synthesis
+  const controller = new AbortController();
+  _ttsAbort = controller;
+  const voice = TTS_VOICE_MAP[S.voice] || 'nova';
+  try {
+    const resp = await fetch('https://api.openai.com/v1/audio/speech', {
+      method:'POST',
+      headers:{ 'Authorization':'Bearer '+S.apiKey, 'Content-Type':'application/json' },
+      body: JSON.stringify({ model:'tts-1', input:text, voice }),
+      signal: controller.signal,
+    });
+    if (gen!==_ttsGen) return;
+    if (!resp.ok) { return speakQuick(text); }  // await browser fallback
+    const blob     = await resp.blob();
+    if (gen!==_ttsGen) return;
+    const audioUrl = URL.createObjectURL(blob);
+    const audio    = new Audio(audioUrl);
+    _ttsAudio = audio; _ttsAbort = null;
+    await new Promise(resolve => {
+      const capturedGen = gen;
+      audio.onended = audio.onerror = () => {
+        URL.revokeObjectURL(audioUrl);
+        if (_ttsAudio===audio) _ttsAudio=null;
+        resolve();
+      };
+      // BUG-FIX: stopSpeaking() pauses instead of ending — detect gen change and resolve
+      audio.onpause = () => {
+        if (_ttsGen !== capturedGen) { URL.revokeObjectURL(audioUrl); resolve(); }
+      };
+      audio.play().catch(() => { URL.revokeObjectURL(audioUrl); resolve(); });
+    });
+  } catch(err) {
+    if (err.name==='AbortError') return;
+    if (gen!==_ttsGen) return;
+    return speakQuick(text);  // await browser fallback
+  }
+}
+
+function speakQuick(text) {
+  ++_synthGen; _ttsGen++;
+  if (_ttsAbort) { _ttsAbort.abort(); _ttsAbort=null; }
+  if (_ttsAudio)  { _ttsAudio.pause(); _ttsAudio.src=''; _ttsAudio=null; }
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  // BUG-FIX: return a Promise so callers can await speech completion
+  return new Promise(resolve => {
+    if (!window.speechSynthesis) { resolve(); return; }
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang  = S.language==='chinese' ? 'zh-CN' : 'en-US';
+    utt.rate  = 0.95;
+    const voices = window.speechSynthesis.getVoices() || [];
+    const lang   = utt.lang.split('-')[0];
+    const match  = voices.find(v => v.lang.startsWith(lang));
+    if (match) utt.voice = match;
+    utt.onend   = resolve;
+    utt.onerror = resolve;
+    window.speechSynthesis.speak(utt);
+  });
+}
+
+function stopSpeaking() {
+  _ttsGen++; _synthGen++;
+  if (_ttsAbort) { _ttsAbort.abort(); _ttsAbort=null; }
+  if (_ttsAudio)  { _ttsAudio.pause(); _ttsAudio.src=''; _ttsAudio=null; }
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+}
+
+// Stop button: kills audio; handles opening-statement case (start user turn)
+function handleStop() {
+  stopSpeaking();
+  M.aiSpeaking = false;
+  // If judge resolved and deferred, advance now
+  if (M.pendingNextTurn && M.phase !== 'over') {
+    M.pendingNextTurn = false;
+    setTimeout(() => { if (M.phase !== 'over') handleKnockoutLogic(); }, 200);
+    return;
+  }
+  if (M.phase !== 'ai_speak' || M.phase === 'over') return;
+  const exchIdx = M.exchangeNum;
+  setTimeout(() => {
+    if (M.phase === 'over' || M.exchangeNum !== exchIdx) return;
+    // If user hasn't spoken yet (opening interrupted) → start user turn
+    const ex = S.exchanges[exchIdx];
+    if (ex && !ex.userText && !ex.aiSpeakDone) {
+      ex.aiSpeakDone = true;
+      setCardBadge('ai', 'done');
+      runTurn('user');
+    }
+    // If user text exists, checkAndJudge() already fired when aiText was stored
+  }, 120);
+}
+if (window.speechSynthesis) {
+  window.speechSynthesis.getVoices();
+  if (window.speechSynthesis.onvoiceschanged !== undefined)
+    window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TODO-12: JUDGE EVALUATION  (GPT-4o → JSON)
+// ═══════════════════════════════════════════════════════════
+async function callJudge(userText, aiText) {
+  if (!S.apiKey) { afterJudge({winner:'user',delta:1,reason:'[API key required]'}); return; }
+
+  const lang = S.language === 'chinese' ? 'Chinese (Mandarin)' : 'English';
+  // Sides are dynamic — set from RPS winner at matchStart
+  const humanSide = S.userSide || '正方';  // '正方' or '反方'
+  const aiSide2   = S.aiSide   || '反方';  // '反方' or '正方'
+  const humanSideEN = humanSide === '正方' ? 'FOR (supporting the proposition)' : 'AGAINST (opposing the proposition)';
+  const aiSideEN2   = aiSide2   === '正方' ? 'FOR (supporting the proposition)' : 'AGAINST (opposing the proposition)';
+
+  const systemPrompt =
+    `You are an experienced competitive debate judge. Topic: "${S.topic}".\n` +
+    `HUMAN is ${humanSide} — ${humanSideEN}.\n` +
+    `AI is ${aiSide2} — ${aiSideEN2}.\n\n` +
+    `Score each side on 5 criteria (0-10 each):\n` +
+    `  1. RELEVANCE — Is the argument directly on-topic AND consistent with the speaker's own side (${humanSide}/${aiSide2})? Arguing the OPPONENT'S side = 0 for this criterion.\n` +
+    `  2. LOGIC — Is the reasoning coherent and free of fallacies?\n` +
+    `  3. EVIDENCE — Are claims backed by facts, examples, or data?\n` +
+    `  4. REBUTTAL — Does it directly address and dismantle the opponent's point?\n` +
+    `  5. CLARITY — Is it concise, well-structured, easy to follow?\n\n` +
+    `CRITICAL RULE — SIDE VIOLATION: If a debater argues FOR the opponent's position instead of their own, ALL their scores = 0 and award delta=4 to the opponent. Mention the violation in the reason.\n` +
+    `RULE: If one side's statement is clearly irrelevant, nonsensical, or empty, award the other side delta=4 automatically.\n` +
+    `Assign delta based on the average score gap:\n` +
+    `  delta=5: Devastating (avg 9-10, or loser spoke nonsense/irrelevant)\n` +
+    `  delta=4: Dominant (avg 7-8 gap, or side violation)\n` +
+    `  delta=3: Strong win (avg 5-6 gap)\n` +
+    `  delta=2: Moderate edge (avg 3-4 gap)\n` +
+    `  delta=1: Marginal edge (avg 1-2 gap)\n` +
+    `  delta=0: Both equally irrelevant or empty — no movement\n\n` +
+    `Write the reason in ${lang}. If there is a side violation, clearly state which side violated and why.\n` +
+    `Return ONLY valid JSON: { "winner": "user" or "ai", "delta": 0/1/2/3/4/5, "reason": "one sentence" }`;
+
+  try {
+    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method:'POST',
+      headers:{ 'Authorization':'Bearer '+S.apiKey, 'Content-Type':'application/json' },
+      body: JSON.stringify({
+        model:'gpt-4o',
+        messages:[
+          {role:'system',content:systemPrompt},
+          {role:'user',  content:`Human (${humanSide}): "${userText||'(no statement — skipped)'}"\nAI (${aiSide2}): "${aiText||'(no statement — skipped)'}"\nJudge this exchange.`},
+        ],
+        max_tokens:150, temperature:0.2,
+        response_format:{type:'json_object'},
+      }),
+    });
+    if (!resp.ok) { let e='HTTP '+resp.status; try{const j=await resp.json();e=j.error?.message||e;}catch{} throw new Error(e); }
+    const data = await resp.json();
+    let result;
+    try { result = JSON.parse(data.choices?.[0]?.message?.content || '{}'); } catch { result={}; }
+    const winner = ['user','ai'].includes(result.winner) ? result.winner : 'user';
+    const delta  = [0,1,2,3,4,5].includes(Number(result.delta)) ? Number(result.delta) : 1;
+    const reason = typeof result.reason==='string' ? result.reason : '—';
+    afterJudge({ winner, delta, reason });
+  } catch(err) {
+    toast('Judge error: '+err.message,3500);
+    afterJudge({winner:'user',delta:1,reason:'[Judge error]'});
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TODO-13: COACH HINT  (GPT-4o — inline insight card)
+// ═══════════════════════════════════════════════════════════
+
+function showCoachHint(tip) {
+  if (!tip) return;
+  const card = document.getElementById('insightCard');
+  const body = document.getElementById('insightText');
+  if (card && body) {
+    body.textContent = tip;
+    card.classList.add('visible');
+    // Scroll panels to show insight card
+    const panels = document.getElementById('matchPanels');
+    if (panels) panels.scrollTop = panels.scrollHeight;
+  }
+}
+function hideCoachHint() {
+  const card = document.getElementById('insightCard');
+  if (card) card.classList.remove('visible');
+}
+
+async function callCoach(aiText) {
+  if (!S.coaching || !S.apiKey || !aiText) return;
+  try {
+    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method:'POST',
+      headers:{ 'Authorization':'Bearer '+S.apiKey, 'Content-Type':'application/json' },
+      body: JSON.stringify({
+        model:'gpt-4o',
+        messages:[{ role:'user',
+          content:`You are a debate coach. Topic: "${S.topic}".\nAI just said: "${aiText}"\nGive the human ONE short prep tip (max 1 sentence) to respond effectively. Output ONLY the tip.`
+        }],
+        max_tokens:60, temperature:0.7,
+      }),
+    });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const tip  = data.choices?.[0]?.message?.content?.trim();
+    if (tip) showCoachHint(tip);
+  } catch{ /* silent */ }
+}
+
+// ── Coach is integrated inline in runTurn via callCoach(lastAiText) ──────────
+
+// ═══════════════════════════════════════════════════════════
+//  IMPROVE-02: PEERJS MULTIPLAYER
+// ═══════════════════════════════════════════════════════════
+const PEER_PREFIX = 'Debate-';
+
+const mp = {
+  active:   false,
+  role:     null,    // 'p1' | 'p2'
+  peer:     null,
+  conn:     null,
+  roomCode: '',
+  broadcastAcc: 0,
+  // Sequence numbers to deduplicate P2 statements
+  mySeq:  0,
+  p2Seq:  0,
+};
+
+// ── Lobby UI helpers ─────────────────────────────────────────
+function lobbyOpen() {
+  lobbyShowView('lv-home');
+  document.getElementById('mpLobby').classList.add('visible');
+}
+function lobbyClose() {
+  document.getElementById('mpLobby').classList.remove('visible');
+}
+function lobbyBack() {
+  document.getElementById('err-create').textContent = '';
+  document.getElementById('err-join').textContent   = '';
+  lobbyCancel();
+  lobbyShowView('lv-home');
+}
+function lobbyShowCreate() { lobbyShowView('lv-create'); }
+function lobbyShowJoin()   { lobbyShowView('lv-join');   }
+function lobbyShowView(id) {
+  document.querySelectorAll('.lv').forEach(el => el.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function lobbyCancel() {
+  if (mp.peer && !mp.peer.destroyed) { try { mp.peer.destroy(); } catch(_){} mp.peer = null; }
+  if (mp.conn) { try { mp.conn.close(); } catch(_){} mp.conn = null; }
+  mp.active = false; mp.role = null;
+}
+
+// ── Create Room (P1 / host) ──────────────────────────────────
+function doCreateRoom() {
+  const raw   = document.getElementById('inp-create').value.trim().toUpperCase();
+  const errEl = document.getElementById('err-create');
+  if (!raw) { errEl.textContent = 'Please enter a room name.'; return; }
+  errEl.textContent = '';
+
+  const peerId = PEER_PREFIX + raw;
+  mp.roomCode  = raw;
+  mp.role      = 'p1';
+
+  document.getElementById('disp-code').textContent     = raw;
+  document.getElementById('waiting-status').textContent = 'Waiting for opponent…';
+  lobbyShowView('lv-waiting');
+
+  const peer = new Peer(peerId);
+  mp.peer = peer;
+
+  peer.on('error', (err) => {
+    const msg = err.type === 'unavailable-id'
+      ? 'Room name taken — try another.'
+      : 'Error: ' + err.message;
+    document.getElementById('waiting-status').textContent = msg;
+    lobbyCancel();
+    setTimeout(lobbyBack, 2200);
+  });
+
+  peer.on('connection', (conn) => {
+    mp.conn = conn;
+    conn.on('open',  () => { lobbyClose(); onBothConnected_P1(conn); });
+    conn.on('error', (e) => console.warn('P1 conn error', e));
+  });
+}
+
+// ── Join Room (P2 / client) ──────────────────────────────────
+function doJoinRoom() {
+  const raw   = document.getElementById('inp-join').value.trim().toUpperCase();
+  const errEl = document.getElementById('err-join');
+  if (!raw) { errEl.textContent = 'Please enter a room name.'; return; }
+  errEl.textContent = '';
+
+  const peerId = PEER_PREFIX + raw;
+  mp.roomCode  = raw;
+  mp.role      = 'p2';
+
+  document.getElementById('connecting-status').textContent = 'Connecting to ' + raw + '…';
+  lobbyShowView('lv-connecting');
+
+  const peer = new Peer();
+  mp.peer = peer;
+
+  peer.on('error', (err) => {
+    document.getElementById('connecting-status').textContent = 'Failed: ' + err.message;
+    setTimeout(lobbyBack, 2200);
+  });
+
+  peer.on('open', () => {
+    const conn = peer.connect(peerId, { reliable: true });
+    mp.conn = conn;
+    conn.on('open',  () => { lobbyClose(); onBothConnected_P2(conn); });
+    conn.on('error', () => {
+      document.getElementById('connecting-status').textContent =
+        'Could not reach room "' + raw + '"';
+      setTimeout(lobbyBack, 2200);
+    });
+  });
+}
+
+// ── Connection established ───────────────────────────────────
+function onBothConnected_P1(conn) {
+  mp.active = true; mp.role = 'p1';
+  conn.on('data',  receiveFromP2);
+  conn.on('close', onOpponentDisconnected);
+  toast('Opponent connected! Starting…');
+  // P1 syncs topic + settings to P2, then starts RPS
+  setTimeout(() => {
+    conn.send({ type: 'settings', topic: S.topic, persona: S.persona,
+      tone: S.tone, language: S.language, difficulty: S.difficulty,
+      voice: S.voice, coaching: S.coaching });
+    showScreen('screen-rps');
+  }, 600);
+}
+
+function onBothConnected_P2(conn) {
+  mp.active = true; mp.role = 'p2';
+  conn.on('data',  receiveFromP1);
+  conn.on('close', onOpponentDisconnected);
+  toast('Connected to room "' + mp.roomCode + '"!');
+  // P2 waits for settings + RPS instruction from P1
+}
+
+// ── Receive data from P2 (runs on P1) ───────────────────────
+function receiveFromP2(data) {
+  if (data.type === 'rps') {
+    // P1 has its own pick (already chosen); P2 sent theirs
+    mp._p2RpsPick = data.pick;
+    if (mp._p1RpsPick) resolveMultiplayerRPS(mp._p1RpsPick, mp._p2RpsPick);
+  } else if (data.type === 'statement') {
+    if (data.seq <= mp.p2Seq) return;
+    mp.p2Seq = data.seq;
+    // P2's voice statement arrives — process as the "opponent" turn
+    handleP2Statement(data.text || '');
+  }
+}
+
+// ── Receive data from P1 (runs on P2) ───────────────────────
+function receiveFromP1(data) {
+  if (data.type === 'settings') {
+    // Apply P1's settings
+    S.topic = data.topic; S.persona = data.persona; S.tone = data.tone;
+    S.language = data.language; S.difficulty = data.difficulty;
+    S.voice = data.voice; S.coaching = data.coaching;
+    showScreen('screen-rps');
+  } else if (data.type === 'rps_result') {
+    // P1 resolved RPS → show result on P2 screen
+    showRPSResult_P2(data.p1Pick, data.p2Pick, data.first);
+  } else if (data.type === 'state') {
+    // P1 authoritative state broadcast
+    applyStateFromP1(data);
+  } else if (data.type === 'match_start') {
+    // P2 does UI-only init — no timer, no runTurn (P1 drives all game logic)
+    mpMatchInit_P2();
+  }
+}
+
+// ── P1 broadcasts state at ~20Hz ────────────────────────────
+function broadcastState() {
+  if (!mp.conn || !mp.active || mp.role !== 'p1') return;
+  mp.conn.send({
+    type:        'state',
+    phase:       M.phase,
+    starPos:     M.starPos,
+    koCount:     M.koCount,
+    turn:        M.currentTurn,
+    gameTimerSecs: M.gameTimerSecs,
+    turnTimerSecs: M.turnTimerSecs,
+    aiText:      document.getElementById('aiText')?.innerHTML  || '',
+    userText:    document.getElementById('userText')?.innerHTML || '',
+    judgeReason: document.getElementById('judgeReason')?.textContent || '',
+    judgeDelta:  S.exchanges[M.exchangeNum - 1]?.judgeDelta,
+    judgeWinner: S.exchanges[M.exchangeNum - 1]?.judgeWinner,
+    turnBanner:  document.getElementById('turnBanner')?.textContent || '',
+    turnBannerCls: document.getElementById('turnBanner')?.className || '',
+    matchResult: S.matchResult || null,
+  });
+}
+
+// ── Apply P1's state on P2's device ─────────────────────────
+function applyStateFromP1(data) {
+  // Update star
+  if (data.starPos !== undefined) setStarPos(data.starPos);
+  // Update timer displays
+  if (data.gameTimerSecs !== undefined) {
+    M.gameTimerSecs = data.gameTimerSecs;
+    updateGameTimerUI();
+  }
+  if (data.turnTimerSecs !== undefined) {
+    M.turnTimerSecs = data.turnTimerSecs;
+    updateTurnTimerUI();
+  }
+  // Update turn banner + bottom-bar badge (BUG-03 fix)
+  if (data.turnBanner) {
+    const tb = document.getElementById('turnBanner');
+    if (tb) { tb.textContent = data.turnBanner; tb.className = data.turnBannerCls || 'turn-banner'; }
+    // Sync mbbTurnBadge for P2
+    const badge = document.getElementById('mbbTurnBadge');
+    if (badge) {
+      const cls = data.turnBannerCls || '';
+      badge.className = 'mbb-turn-badge';
+      if      (cls.includes('user-turn'))  { badge.classList.add('your-turn');  badge.textContent = '🎤 Your Turn'; }
+      else if (cls.includes('ai-turn'))    { badge.classList.add('ai-turn');    badge.textContent = '🤖 AI Turn'; }
+      else if (cls.includes('judge-turn')) { badge.classList.add('judge-turn'); badge.textContent = '⚖️ Judging…'; }
+      else { badge.textContent = '–'; }
+    }
+  }
+  // Update cards
+  if (data.aiText)   { const el = document.getElementById('aiText');   if (el) el.innerHTML = data.aiText; }
+  if (data.userText) { const el = document.getElementById('userText'); if (el) el.innerHTML = data.userText; }
+  if (data.judgeReason) {
+    const el = document.getElementById('judgeReason');
+    const strip = document.getElementById('judgeStrip');
+    if (el) el.textContent = data.judgeReason;
+    if (strip && data.judgeReason) strip.style.display = '';
+  }
+  // KO indicator
+  if (data.koCount !== undefined) { M.koCount = data.koCount; updateKoUI(); }
+  // Match over
+  if (data.matchResult && M.phase !== 'over') {
+    M.phase     = 'over';
+    S.matchResult = data.matchResult;
+    clearInterval(M.gameTimerInt);
+    stopTurnTimer();
+    setTimeout(() => {
+      showScreen('screen-postmatch');
+      if (typeof postMatchStart === 'function') postMatchStart();
+    }, 600);
+  }
+  // Mic enable/disable for P2's turns
+  // applyStateFromP1 only runs on P2 (P1 controls its own mic directly in runTurn)
+  // From P1's perspective P2 is the 'ai', so P2's speaking turn = data.turn === 'ai'
+  const micBtn = document.getElementById('micBtn');
+  if (micBtn) {
+    const isMyTurn  = (data.turn === 'ai');
+    const canRecord = isMyTurn && (data.phase === 'ai_speak' || data.phase === 'user_prep');
+    micBtn.disabled = !canRecord;
+  }
+}
+
+// ── P2 sends voice statement to P1 ──────────────────────────
+// Overrides afterUserSpeaks to route through PeerJS on P2
+const _baseAfterUserSpeaks = null; // placeholder — see patch below
+
+// ── Handle P2's statement on P1 ─────────────────────────────
+function handleP2Statement(text) {
+  // On P1: P2's statement is the "AI" side in the exchange from P1's perspective
+  setCardText('ai', esc(text).replace(/\n/g,'<br>'));
+  setCardBadge('ai', 'done');
+  if (!S.exchanges[M.exchangeNum]) S.exchanges[M.exchangeNum] = {};
+  S.exchanges[M.exchangeNum].aiText = text;
+  stopTurnTimer();
+
+  // Mirror the BUG-01 fix: if P2 (ai) opened the debate, P1 hasn't spoken yet
+  if (S.firstSpeaker === 'ai' && M.exchangeNum === 0) {
+    // P2 made the opening statement — now P1 responds
+    runTurn('user');
+  } else {
+    // Both sides have spoken → judge the exchange
+    if (typeof callJudge === 'function') {
+      setTurnBanner('⚖️ JUDGE EVALUATING…', 'judge-turn');
+      setMatchStatus('Judge is evaluating the exchange…', 'processing');
+      callJudge(
+        S.exchanges[M.exchangeNum].userText || '',
+        S.exchanges[M.exchangeNum].aiText   || ''
+      );
+    }
+  }
+}
+
+// ── RPS multiplayer ──────────────────────────────────────────
+// P1 picks → stores locally, waits for P2's pick
+// P2 picks → sends to P1, waits for result
+function mpRpsPick(pick) {
+  if (!mp.active) return false; // not in multiplayer
+  if (mp.role === 'p1') {
+    mp._p1RpsPick = pick;
+    if (mp._p2RpsPick) resolveMultiplayerRPS(mp._p1RpsPick, mp._p2RpsPick);
+    // Show "waiting for opponent" on P1's RPS screen
+    document.getElementById('rpsPhaseLabel').textContent = 'Waiting for opponent…';
+  } else {
+    // P2: send pick to P1
+    mp.mySeq++;
+    mp.conn.send({ type: 'rps', pick, seq: mp.mySeq });
+    document.getElementById('rpsPhaseLabel').textContent = 'Waiting for result…';
+  }
+  return true;
+}
+
+function resolveMultiplayerRPS(p1Pick, p2Pick) {
+  const RPS_BEATS = { rock:'scissors', paper:'rock', scissors:'paper' };
+  let first;
+  if (p1Pick === p2Pick) {
+    first = 'tie';
+  } else if (RPS_BEATS[p1Pick] === p2Pick) {
+    first = 'p1'; // P1 wins → P1 (user/host) speaks first
+  } else {
+    first = 'p2'; // P2 wins → P2 speaks first
+  }
+  // P1 resolves and broadcasts result to P2
+  mp.conn.send({ type: 'rps_result', p1Pick, p2Pick, first });
+  // P1 shows the result locally
+  showRPSResult_local(p1Pick, p2Pick, first, 'p1');
+  // Reset stored picks
+  mp._p1RpsPick = null; mp._p2RpsPick = null;
+}
+
+function showRPSResult_P2(p1Pick, p2Pick, first) {
+  showRPSResult_local(p2Pick, p1Pick, first, 'p2');
+}
+
+function showRPSResult_local(myPick, oppPick, first, myRole) {
+  const RPS_EMOJI = { rock:'🪨', paper:'📄', scissors:'✂️' };
+  const reveal    = document.getElementById('rpsReveal');
+  const userEl    = document.getElementById('rpsUserEmoji');
+  const aiEl      = document.getElementById('rpsAiEmoji');
+  document.getElementById('rpsAiLabel').textContent = 'Opponent';
+  reveal.classList.add('visible');
+  userEl.textContent = RPS_EMOJI[myPick]  || '❓';
+  aiEl.textContent   = RPS_EMOJI[oppPick] || '❓';
+  userEl.classList.add('anim'); aiEl.classList.add('anim');
+
+  const resultEl = document.getElementById('rpsResult');
+  if (first === 'tie') {
+    resultEl.textContent = '🤝 Tie! Going again…';
+    resultEl.className   = 'rps-result tie visible';
+    document.getElementById('rpsPhaseLabel').textContent = 'It\'s a tie!';
+    // Re-enable buttons for re-pick
+    setTimeout(() => {
+      document.querySelectorAll('.rps-btn').forEach(b => {
+        b.disabled = false; b.classList.remove('selected');
+      });
+      reveal.classList.remove('visible');
+      resultEl.className = 'rps-result';
+      document.getElementById('rpsPhaseLabel').textContent = 'Pick again!';
+    }, 1600);
+  } else {
+    const iSpeak = (first === myRole);
+    S.firstSpeaker = iSpeak ? 'user' : 'ai';
+    resultEl.textContent = iSpeak ? '🎉 You win! You speak first.' : '💀 Opponent wins! They speak first.';
+    resultEl.className   = `rps-result visible ${iSpeak ? 'win' : 'lose'}`;
+    document.getElementById('rpsPhaseLabel').textContent = iSpeak ? 'You go first!' : 'Opponent goes first!';
+    setTimeout(() => {
+      showScreen('screen-match');
+      if (mp.role === 'p1') {
+        // P1 starts the match + notifies P2
+        if (typeof matchStart === 'function') matchStart();
+        setTimeout(() => mp.conn.send({ type: 'match_start' }), 400);
+      }
+    }, 1800);
+  }
+}
+
+// ── State broadcast interval (20Hz) ─────────────────────────
+setInterval(() => {
+  if (mp.active && mp.role === 'p1' && M.phase !== 'idle') broadcastState();
+}, 50);
+
+// ── Opponent disconnected ────────────────────────────────────
+function onOpponentDisconnected() {
+  const wasActive = mp.active;
+  mp.active = false; mp.role = null;
+  clearInterval(M.gameTimerInt);
+  stopTurnTimer(); stopSpeaking();
+  if (mp.peer && !mp.peer.destroyed) { try { mp.peer.destroy(); } catch(_){} mp.peer = null; }
+  mp.conn = null;
+  if (wasActive) {
+    toast('Opponent disconnected.', 4000);
+    setTimeout(() => { showScreen('screen-config'); lobbyOpen(); }, 800);
+  }
+}
+
+// ── Patch: mode card — open lobby when multiplayer chosen ────
+document.getElementById('modeGroup').querySelectorAll('.mode-card').forEach(card => {
+  card.addEventListener('click', () => {
+    if (card.dataset.mode === 'multiplayer' && S.topic) {
+      // Only open lobby if topic is already set
+      setTimeout(lobbyOpen, 150);
+    }
+  });
+});
+
+// ── Patch: Start Battle — open lobby if multiplayer ──────────
+document.getElementById('startBattleBtn').addEventListener('click', (e) => {
+  if (S.mode === 'multiplayer') {
+    e.stopImmediatePropagation(); // prevent the bubbling listener below from firing
+    if (!S.apiKey) {
+      document.getElementById('apiDrawer').classList.remove('hidden');
+      setTimeout(() => document.getElementById('apiKeyInput').focus(), 50);
+      toast('Please set your OpenAI API key first');
+      return;
+    }
+    if (!S.topic) { toast('Please pick a topic first'); return; }
+    lobbyOpen();
+  }
+  // Solo: fall through — the bubbling listener handles it
+}, true); // capture phase so this fires before existing handler
+
+// ── Patch: RPS — intercept button clicks for multiplayer ─────
+document.querySelectorAll('.rps-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (!mp.active) return; // solo: handled by existing rpsResolve()
+    if (btn.disabled) return;
+    const pick = btn.dataset.pick;
+    document.querySelectorAll('.rps-btn').forEach(b => {
+      b.disabled = true; b.classList.toggle('selected', b.dataset.pick === pick);
+    });
+    mpRpsPick(pick);
+  });
+});
+
+// ── Patch: afterUserSpeaks — route P2's statement to P1 ──────
+const _soloAfterUserSpeaks = afterUserSpeaks;
+afterUserSpeaks = function(transcript) {
+  if (mp.active && mp.role === 'p2') {
+    // P2: send transcript to P1 and wait for state updates
+    mp.mySeq++;
+    mp.conn.send({ type: 'statement', text: transcript, seq: mp.mySeq });
+    setCardText('user', esc(transcript).replace(/\n/g,'<br>'));
+    setCardBadge('user', 'done');
+    setMatchStatus('Statement sent. Waiting for judge…', '');
+    document.getElementById('micBtn').disabled = true;
+    return;
+  }
+  // Solo / P1: use normal flow
+  _soloAfterUserSpeaks(transcript);
+};
+
+// ═══════════════════════════════════════════════════════════
+//  TODO-15 / IMPROVE-04: POST-MATCH SCREEN
+// ═══════════════════════════════════════════════════════════
+function postMatchStart() {
+  const result = S.matchResult || { winner: 'user', reason: 'time', starPos: 0.5 };
+  const isUser = result.winner === 'user';
+
+  // Hero — large centered winner card
+  document.getElementById('pmTrophy').textContent = isUser ? '🏆' : '💀';
+  const nameEl = document.getElementById('pmWinnerName');
+  nameEl.textContent = isUser ? 'YOU WIN!' : (mp.active && mp.role ? 'OPPONENT WINS!' : 'AI WINS!');
+  nameEl.className   = 'pm-winner-name ' + (isUser ? 'user' : 'ai');
+  const reasonMap = { knockout: '⚡ Knockout Victory', time: '⏱ Time — Star Position' };
+  document.getElementById('pmReasonBadge').textContent =
+    reasonMap[result.reason] || 'Match Complete';
+
+  // Build exchange log
+  buildTranscript();
+
+  // Wire single "View Summary Details" toggle
+  const detBtn   = document.getElementById('pmDetailToggle');
+  const detPanel = document.getElementById('pmDetailPanel');
+  // Remove any stale listener by replacing with a clone
+  const freshBtn = detBtn.cloneNode(true);
+  detBtn.parentNode.replaceChild(freshBtn, detBtn);
+  freshBtn.addEventListener('click', () => {
+    const open = detPanel.style.display !== 'none';
+    detPanel.style.display = open ? 'none' : 'flex';
+    freshBtn.classList.toggle('open', !open);
+    freshBtn.querySelector('.det-icon').textContent = open ? '▼' : '▲';
+    // Trigger bar animations when panel opens
+    if (!open) triggerScorecardBars();
+  });
+
+  // Call breakdown scorecard
+  if (S.exchanges && S.exchanges.length > 0 && typeof callBreakdown === 'function') {
+    callBreakdown(S.exchanges);
+  }
+}
+
+function buildTranscript() {
+  const list = document.getElementById('pmExchangeList');
+  list.innerHTML = '';
+  if (!S.exchanges || !S.exchanges.length) {
+    list.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:12px;padding:16px">No exchanges recorded.</div>';
+    return;
+  }
+  const oppLabel = (mp.active && mp.role) ? '👤 Opponent' : '🤖 AI';
+  S.exchanges.forEach((ex, i) => {
+    const div = document.createElement('div');
+    div.className = 'pm-exchange';
+    const winnerCls  = ex.judgeWinner === 'user' ? 'user' : (ex.judgeWinner === 'ai' ? 'ai' : '');
+    const deltaLabel = ex.judgeDelta
+      ? `+${ex.judgeDelta} → ${ex.judgeWinner === 'user' ? 'You' : (mp.active ? 'Opponent' : 'AI')}`
+      : '—';
+    // Mini star gauge
+    const starPct   = ex.starPos !== undefined ? Math.round(ex.starPos * 100) : null;
+    const miniGauge = starPct !== null
+      ? `<div class="pm-mini-gauge-wrap">
+           <div class="pm-mini-gauge-label">⭐ Star — ${starPct < 50 ? 'Your side' : starPct > 50 ? (mp.active ? 'Opponent side' : 'AI side') : 'Center'}</div>
+           <div class="pm-mini-gauge-bg">
+             <span class="pm-mini-gauge-star" style="left:${starPct}%">⭐</span>
+           </div>
+         </div>`
+      : '';
+    div.innerHTML =
+      `<div class="pm-ex-hdr">
+         <span class="ex-num">Exchange ${i + 1}</span>
+         ${ex.judgeDelta ? `<span class="ex-delta ${winnerCls}">${esc(deltaLabel)}</span>` : ''}
+       </div>
+       ${ex.aiText   ? `<div class="pm-stmt ai-stmt"><div class="stmt-who">${oppLabel}</div>${esc(ex.aiText).replace(/\n/g,'<br>')}</div>`   : ''}
+       ${ex.userText ? `<div class="pm-stmt user-stmt"><div class="stmt-who">🎤 You</div>${esc(ex.userText).replace(/\n/g,'<br>')}</div>` : ''}
+       ${ex.judgeReason ? `<div class="pm-judge-note"><strong>⚖️ Judge:</strong> ${esc(ex.judgeReason)}</div>` : ''}
+       ${miniGauge}`;
+    list.appendChild(div);
+  });
+}
+
+// Trigger scorecard bar animations (called when panel opens)
+function triggerScorecardBars() {
+  const fields = ['Logic','Evidence','Clarity','Emotion'];
+  fields.forEach(f => {
+    const bar = document.getElementById('sc' + f);
+    if (bar && bar._targetWidth) { bar.style.width = bar._targetWidth; }
+  });
+}
+
+function rematchFromPostMatch() {
+  rpsStart();
+  showScreen('screen-rps');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TODO-16: BREAKDOWN SCORECARD  (GPT-4o)
+// ═══════════════════════════════════════════════════════════
+async function callBreakdown(exchanges) {
+  if (!S.apiKey || !exchanges.length) return;
+  const transcript = exchanges.map((ex, i) =>
+    `Exchange ${i+1}:\nAI: ${ex.aiText||'(skipped)'}\nUser: ${ex.userText||'(skipped)'}`
+  ).join('\n\n');
+
+  const systemPrompt =
+    `You are an expert debate coach analyzing a full debate.\n` +
+    `Topic: "${S.topic}"\n` +
+    `Rate the HUMAN debater (the user) on these four dimensions, each 1-10:\n` +
+    `Logic, Evidence, Clarity, Emotion\n` +
+    `Also write a 2-sentence overall verdict.\n` +
+    `Return ONLY a JSON object (no markdown):\n` +
+    `{ "logic": N, "evidence": N, "clarity": N, "emotion": N, "verdict": "two sentences" }`;
+
+  try {
+    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method:'POST',
+      headers:{ 'Authorization':'Bearer '+S.apiKey, 'Content-Type':'application/json' },
+      body: JSON.stringify({
+        model:'gpt-4o',
+        messages:[
+          { role:'system', content:systemPrompt },
+          { role:'user',   content:`Full debate transcript:\n${transcript}` },
+        ],
+        max_tokens:200, temperature:0.4,
+        response_format:{ type:'json_object' },
+      }),
+    });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    let sc;
+    try { sc = JSON.parse(data.choices?.[0]?.message?.content || '{}'); } catch { return; }
+
+    // Render scorecard
+    const card = document.getElementById('pmScorecard');
+    if (!card) return;
+    card.style.display = '';
+    const fields = ['logic','evidence','clarity','emotion'];
+    fields.forEach(f => {
+      const val   = Math.min(10, Math.max(1, parseInt(sc[f]) || 5));
+      const key   = f.charAt(0).toUpperCase() + f.slice(1);
+      const bar   = document.getElementById('sc' + key);
+      const valEl = document.getElementById('sc' + key + 'Val');
+      const pct   = (val * 10) + '%';
+      if (bar) {
+        bar._targetWidth = pct;          // store for lazy animation
+        const panel = document.getElementById('pmDetailPanel');
+        if (panel && panel.style.display !== 'none') {
+          setTimeout(() => { bar.style.width = pct; }, 100); // panel already open
+        }
+      }
+      if (valEl) valEl.textContent = val + '/10';
+    });
+    const verdEl = document.getElementById('scVerdict');
+    if (verdEl && sc.verdict) verdEl.textContent = sc.verdict;
+  } catch { /* silent — scorecard is optional */ }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════
+(function init() {
+  const _EK = 'OMgyp/Axoxu6QshX9AiUKAf7J6DlaZ5OkgDzHs0lsFoMlia0+hOxQ50SjR3pWLwpeNVR5fZmoW62R/lqwQeLYTvbKqL7EIhaswmCXfUnjy8H/EvkwDKrXbI730CsCbVXJNZ2ptY3+nOHSP19pyuPUyP0XaPWP/BuwjneVNRXjWAl8FabuhewWbE+40jzN4JTfdt5vboXgg6wEtFJ5BKCby3zSpY=';
+  let k = '';
+  try { k = localStorage.getItem('df_api_key') || ''; } catch (_) {}
+  if (!k) k = _dk(_EK); // fall back to preset key if no user key saved
+  if (k) {
+    S.apiKey = k;
+    document.getElementById('apiKeyInput').value = k;
+    document.getElementById('apiDot').classList.add('ok');
+  }
+
+  // Start on config screen
+  showScreen('screen-config');
+})();
+</script>
+</body>
+</html>
