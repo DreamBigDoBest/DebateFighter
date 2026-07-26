@@ -1107,7 +1107,7 @@ header{
   <div class="logo">⚔️</div>
   <div class="hdr-info">
     <div class="hdr-title">Debate Fighter</div>
-    <div class="hdr-sub">Voice · AI · Battle</div>
+    <div class="hdr-sub">Voice · Battle</div>
   </div>
   <div id="apiDot" title="API key status"></div>
   <button id="apiToggleBtn">🔑 API Key</button>
@@ -1142,7 +1142,7 @@ header{
       <!-- Tab toggle -->
       <div class="topic-tab-row">
         <button class="topic-tab" id="tabCustom" onclick="switchTopicTab('custom')">✏️ Custom Topic</button>
-        <button class="topic-tab active" id="tabRandom" onclick="switchTopicTab('random')">🎲 Random from DB</button>
+        <button class="topic-tab active" id="tabRandom" onclick="switchTopicTab('random')">🎲 Random Topic</button>
       </div>
 
       <!-- Custom topic pane -->
@@ -1156,7 +1156,7 @@ header{
         </div>
       </div>
 
-      <!-- Random from DB pane -->
+      <!-- Random Topic pane -->
       <div class="topic-db-pane visible" id="topicDbPane">
         <div class="section-label" style="margin-bottom:4px">Category Filter</div>
         <div class="cat-pills" id="catPills">
@@ -1197,39 +1197,6 @@ header{
     </div>
   </div>
 
-  <!-- Difficulty -->
-  <div class="cfg-row">
-    <div class="cfg-label"><span class="cfg-label-icon">⚡</span> Difficulty</div>
-    <div class="pill-group" id="difficultyGroup">
-      <button class="pill" data-val="easy">Easy</button>
-      <button class="pill active" data-val="medium">Medium</button>
-      <button class="pill" data-val="hard">Hard</button>
-      <button class="pill" data-val="expert">Expert</button>
-    </div>
-  </div>
-
-  <!-- AI Persona -->
-  <div class="cfg-row">
-    <div class="cfg-label"><span class="cfg-label-icon">🎭</span> AI Persona</div>
-    <div class="pill-group" id="personaGroup">
-      <button class="pill active" data-val="default">Default</button>
-      <button class="pill" data-val="lawyer">Lawyer</button>
-      <button class="pill" data-val="philosopher">Philosopher</button>
-      <button class="pill" data-val="politician">Politician</button>
-      <button class="pill" data-val="devil">Devil's Advocate</button>
-    </div>
-  </div>
-
-  <!-- Tone -->
-  <div class="cfg-row">
-    <div class="cfg-label"><span class="cfg-label-icon">🎵</span> Tone</div>
-    <div class="pill-group" id="toneGroup">
-      <button class="pill" data-val="harsh">Harsh</button>
-      <button class="pill" data-val="casual">Casual</button>
-      <button class="pill active" data-val="professional">Professional</button>
-    </div>
-  </div>
-
   <!-- Language -->
   <div class="cfg-row">
     <div class="cfg-label"><span class="cfg-label-icon">🌐</span> Language</div>
@@ -1241,17 +1208,17 @@ header{
 
   <!-- Voice -->
   <div class="cfg-row">
-    <div class="cfg-label"><span class="cfg-label-icon">🔊</span> AI Voice</div>
+    <div class="cfg-label"><span class="cfg-label-icon">🔊</span> Voice</div>
     <div class="pill-group" id="voiceGroup">
       <button class="pill" data-val="robot">🤖 Robot</button>
-      <button class="pill active" data-val="real">🎙️ Real AI</button>
-      <button class="pill" data-val="person">👤 Person</button>
+      <button class="pill active" data-val="real">🎙️ AI #1</button>
+      <button class="pill" data-val="person">👤 AI #2</button>
     </div>
   </div>
 
-  <!-- Coaching Hint -->
+  <!-- Insight Hint -->
   <div class="cfg-row">
-    <div class="cfg-label"><span class="cfg-label-icon">💡</span> Coaching Hint</div>
+    <div class="cfg-label"><span class="cfg-label-icon">💡</span> Insight Hint</div>
     <div class="pill-group" id="coachingGroup">
       <button class="pill active" data-val="on">On</button>
       <button class="pill" data-val="off">Off</button>
@@ -1324,10 +1291,17 @@ header{
       <div class="gauge-score-chip chip-ai" id="gaugeScoreAi">
         <span>▼</span><span id="gaugeScoreAiVal">0.0</span>
       </div>
-      <div class="gauge-hint-text" id="gaugeHintText">Stay here for 3+ rounds to win</div>
+      <div class="gauge-hint-text" id="gaugeHintText"> </div>
       <div class="gauge-score-chip chip-user" id="gaugeScoreUser">
         <span>▲</span><span id="gaugeScoreUserVal">0.0</span>
       </div>
+    </div>
+    <!-- Knockout indicator (above gauge bar) -->
+    <div class="ko-indicator" id="koIndicator" style="display:none">
+      <span class="ko-label" id="koLabel">WARNING</span>
+      <span class="ko-dot" id="koDot1"></span>
+      <span class="ko-dot" id="koDot2"></span>
+      <span class="ko-dot" id="koDot3"></span>
     </div>
     <!-- Track -->
     <div class="gauge-track" id="gaugeTrack">
@@ -1339,13 +1313,6 @@ header{
       <span class="gauge-label-ai"   id="gaugeLabelLeft">◀ AI Advantage</span>
       <span class="gauge-label-center">Gauge Point</span>
       <span class="gauge-label-user"  id="gaugeLabelRight">User Advantage ▶</span>
-    </div>
-    <!-- Knockout indicator -->
-    <div class="ko-indicator" id="koIndicator" style="display:none">
-      <span class="ko-label" id="koLabel">KNOCKOUT!</span>
-      <span class="ko-dot" id="koDot1"></span>
-      <span class="ko-dot" id="koDot2"></span>
-      <span class="ko-dot" id="koDot3"></span>
     </div>
   </div>
 
@@ -1686,9 +1653,6 @@ document.getElementById('catPills').querySelectorAll('.cat-pill').forEach(pill =
 });
 
 // ── Init all pill selectors ──────────────────────────────────
-initPillGroup('difficultyGroup', 'difficulty');
-initPillGroup('personaGroup',    'persona');
-initPillGroup('toneGroup',       'tone');
 initPillGroup('languageGroup',   'language');
 initPillGroup('voiceGroup',      'voice');
 initPillGroup('coachingGroup',   'coaching');
@@ -1858,11 +1822,11 @@ function rpsResolve(userPick) {
 
           resultEl.textContent = userWins
             ? `🎉 You win! You are 正方 (FOR the proposition).`
-            : `💀 AI wins! You are 反方 (AGAINST the proposition).`;
+            : `💀 Opponent wins! You are 反方 (AGAINST the proposition).`;
           resultEl.className = `rps-result visible ${userWins ? 'win' : 'lose'}`;
           document.getElementById('rpsPhaseLabel').textContent = userWins
             ? 'You go first!'
-            : 'AI goes first!';
+            : 'Opponent goes first!';
 
           // Transition to match after short delay
           setTimeout(() => {
@@ -2486,12 +2450,14 @@ function updateGameTimerUI() {
 function startTurnTimer(onExpire) {
   M.turnTimerSecs = 30;
   clearInterval(M.turnTimerInt);
+  M.turnTimerInt = null;
   updateTurnTimerUI();
   M.turnTimerInt = setInterval(() => {
     M.turnTimerSecs--;
     updateTurnTimerUI();
     if (M.turnTimerSecs <= 0) {
       clearInterval(M.turnTimerInt);
+      M.turnTimerInt = null;  // Bug 3: always null after expiry
       if (typeof onExpire === 'function') onExpire();
     }
   }, 1000);
@@ -2524,7 +2490,7 @@ function setTurnBanner(text, cls) {
   if (badge) {
     badge.className = 'mbb-turn-badge';
     if (cls === 'user-turn')       { badge.classList.add('your-turn');  badge.textContent = '🎤 Your Turn'; }
-    else if (cls === 'ai-turn')    { badge.classList.add('ai-turn');    badge.textContent = '🤖 AI Turn'; }
+    else if (cls === 'ai-turn')    { badge.classList.add('ai-turn');    badge.textContent = '🤖 Opponent Turn'; }
     else if (cls === 'judge-turn') { badge.classList.add('judge-turn'); badge.textContent = '⚖️ Judging…'; }
     else { badge.textContent = '–'; }
   }
@@ -2571,12 +2537,12 @@ function _initStancePlaceholders() {
   const aiEl   = document.getElementById('aiStance');
   const userEl = document.getElementById('userStance');
   if (aiEl) {
-    aiEl.textContent     = userIsFor ? '反方 — Against the proposition' : '正方 — For the proposition';
+    aiEl.textContent     = userIsFor ? 'Against the proposition' : 'For the proposition';
     aiEl.className       = 'stmt-stance ' + (userIsFor ? 'against' : 'for');
     aiEl.style.display   = 'block';
   }
   if (userEl) {
-    userEl.textContent   = userIsFor ? '正方 — For the proposition' : '反方 — Against the proposition';
+    userEl.textContent   = userIsFor ? 'For the proposition' : 'Against the proposition';
     userEl.className     = 'stmt-stance ' + (userIsFor ? 'for' : 'against');
     userEl.style.display = 'block';
   }
@@ -2591,12 +2557,12 @@ function setStanceUI() {
   const userEl = document.getElementById('userStance');
   const aiEl   = document.getElementById('aiStance');
   if (userEl) {
-    userEl.textContent   = `${S.userSide} — ${userStanceText}`;
+    userEl.textContent   = userStanceText;
     userEl.className     = 'stmt-stance ' + (userIsFor ? 'for' : 'against');
     userEl.style.display = 'block';
   }
   if (aiEl) {
-    aiEl.textContent   = `${S.aiSide} — ${aiStanceText}`;
+    aiEl.textContent   = aiStanceText;
     aiEl.className     = 'stmt-stance ' + (userIsFor ? 'against' : 'for');
     aiEl.style.display = 'block';
   }
@@ -2646,6 +2612,9 @@ function matchStart() {
   // Populate UI
   document.getElementById('matchTopicLabel').textContent = S.topic || '—';
   const _pt = document.getElementById('panelTopicText'); if(_pt) _pt.textContent = S.topic || '—';
+  // Bug 2: always restore correct CSS classes (in case P2 init swapped them)
+  document.getElementById('gaugeLabelLeft').className  = 'gauge-label-ai';
+  document.getElementById('gaugeLabelRight').className = 'gauge-label-user';
   if (S.mode === 'multiplayer') {
     document.getElementById('aiName').textContent        = 'Opponent (P2)';
     document.getElementById('userCardName').textContent  = 'You (P1)';
@@ -2660,6 +2629,8 @@ function matchStart() {
 
   // Reset state
   M.gameTimerSecs = 600;
+  M.turnTimerSecs = 30;  // Bug 3: always reset before match
+  M.turnTimerInt  = null;
   M.starPos       = 0.5;
   M.koCount       = 0;
   M.koAttacker    = null;
@@ -2703,9 +2674,14 @@ function mpMatchInit_P2() {
   const _pt2 = document.getElementById('panelTopicText'); if(_pt2) _pt2.textContent = S.topic || '—';
   document.getElementById('aiName').textContent        = 'Opponent (P1)';
   document.getElementById('userCardName').textContent  = 'You (P2)';
-  document.getElementById('gaugeLabelLeft').textContent  = '◀ P1 Advantage';
-  document.getElementById('gaugeLabelRight').textContent = 'P2 Advantage ▶';
+  // Bug 2 fix: from P2's view, left = P2 wins (star→0), right = P1 wins (star→1)
+  document.getElementById('gaugeLabelLeft').textContent  = '◀ You (P2)';
+  document.getElementById('gaugeLabelLeft').className    = 'gauge-label-user';
+  document.getElementById('gaugeLabelRight').textContent = 'Opponent (P1) ▶';
+  document.getElementById('gaugeLabelRight').className   = 'gauge-label-ai';
   M.gameTimerSecs = 600;
+  M.turnTimerSecs = 30;  // Bug 3: always reset before match
+  M.turnTimerInt  = null;
   M.starPos       = 0.5;
   M.koCount       = 0;
   M.koAttacker    = null;
@@ -2805,10 +2781,10 @@ function runTurn(speaker) {
     setMatchStatus('Tap 🎤 to record your argument', '');
     document.getElementById('micBtn').disabled = false;
 
-    // Show coach hint if coaching is enabled and AI spoke last
+    // Show coach hint if coaching is enabled, not multiplayer, and AI spoke last
     const lastEx = S.exchanges.length ? S.exchanges[S.exchanges.length - 1] : null;
     const lastAiText = lastEx ? lastEx.aiText || '' : '';
-    if (S.coaching && lastAiText && typeof callCoach === 'function') {
+    if (S.coaching && !mp.active && lastAiText && typeof callCoach === 'function') {
       callCoach(lastAiText); // non-blocking — displays overlay when ready
     }
 
@@ -2824,7 +2800,8 @@ function runTurn(speaker) {
   } else {
     // AI / Opponent turn
     document.getElementById('micBtn').disabled = true;
-    updateTurnTimerUI(); // reset bar to full green
+    M.turnTimerSecs = 30;  // Bug 3: reset timer display when waiting for opponent
+    updateTurnTimerUI(); // reset bar to full
 
     if (mp.active && mp.role === 'p1') {
       // MULTIPLAYER: P2 is the human opponent — wait for their statement via PeerJS
@@ -2965,17 +2942,14 @@ function handleKnockoutLogic() {
   if (!inKO) {
     // Star exited red zone — reset knockout count
     if (M.koCount > 0) {
-      const lastAttacker = M.koAttacker; // capture before reset
       M.koCount    = 0;
       M.koAttacker = null;
       updateKoUI();
       document.getElementById('koIndicator').style.display = 'none';
       toast('⭐ Star escaped! Knockout reset.');
-      // Attacker continues pressing; defender successfully escaped
-      runTurn(lastAttacker === 'ai' ? 'ai' : 'user');
-    } else {
-      runTurn('user');
     }
+    // Always start next exchange with P1 (user) for strict alternation
+    runTurn('user');
     return;
   }
 
@@ -3021,10 +2995,10 @@ function ensureVoiceOverlay() {
   const el = document.createElement('div');
   el.id = 'voiceStopOverlay';
   el.style.cssText =
-    'position:fixed;inset:0;z-index:400;background:rgba(6,8,15,.92);' +
-    'border:2px solid var(--green);box-shadow:0 0 30px var(--green-glow);' +
-    'display:none;flex-direction:column;align-items:center;justify-content:center;' +
-    'gap:12px;cursor:pointer;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);' +
+    'position:fixed;bottom:0;left:0;right:0;z-index:400;background:rgba(6,8,15,.95);' +
+    'border-top:2px solid var(--green);box-shadow:0 -4px 24px var(--green-glow);' +
+    'display:none;flex-direction:row;align-items:center;justify-content:center;' +
+    'gap:16px;padding:14px 20px;cursor:pointer;' +
     'animation:micPulse 1.6s ease-in-out infinite;touch-action:manipulation;';
   el.innerHTML =
     `<div style="display:flex;align-items:center;gap:3px;height:28px">
@@ -3034,9 +3008,11 @@ function ensureVoiceOverlay() {
        <span style="display:block;width:3px;background:var(--green);border-radius:2px;animation:lwBar .88s ease-in-out .27s infinite"></span>
        <span style="display:block;width:3px;background:var(--green);border-radius:2px;animation:lwBar .88s ease-in-out .36s infinite"></span>
      </div>
-     <div style="font-size:18px;font-weight:800;color:var(--green)">Tap to Stop &amp; Submit</div>
-     <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">Recording your argument…</div>
-     <button id="voiceCancelBtn" style="margin-top:4px;padding:5px 16px;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.07);color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;touch-action:manipulation;">✕ Cancel</button>`;
+     <div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px">
+       <div style="font-size:15px;font-weight:800;color:var(--green)">Tap to Stop &amp; Submit</div>
+       <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">Recording your argument…</div>
+     </div>
+     <button id="voiceCancelBtn" style="margin-left:8px;padding:5px 14px;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.07);color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;touch-action:manipulation;">✕ Cancel</button>`;
   document.body.appendChild(el);
   el.addEventListener('click', (e) => {
     if (e.target.closest('#voiceCancelBtn')) return;
@@ -3072,6 +3048,7 @@ async function startVoiceCapture() {
     hideVoiceOverlay();
     document.getElementById('micBtn').classList.remove('recording');
     document.getElementById('micBtn').disabled = true;
+    stopTurnTimer(); // Bug 6: stop timer immediately when recording ends (before async transcription)
     try { stream.getTracks().forEach(t => t.stop()); } catch(_){}
     const blob = new Blob(_audioChunks, { type: _mediaRecorder.mimeType || 'audio/webm' });
     _audioChunks = [];
@@ -3223,7 +3200,7 @@ async function callOpponent(userText) {
     S.exchanges[M.exchangeNum].aiSpeakDone  = false;
     setCardBadge('ai','speaking');
     setCardText('ai', esc(text).replace(/\n/g,'<br>'));
-    setMatchStatus('AI is speaking…','speaking');
+    setMatchStatus('P1 is speaking…','speaking');
     checkAndJudge();  // text-based trigger: judge immediately if user text already exists
     M.aiSpeaking = true;
     await speak(text);
@@ -3378,6 +3355,7 @@ async function callJudge(userText, aiText) {
     `  delta=1: Marginal edge (avg 1-2 gap)\n` +
     `  delta=0: Both equally irrelevant or empty — no movement\n\n` +
     `Write the reason in ${lang}. If there is a side violation, clearly state which side violated and why.\n` +
+    `IMPORTANT: In your reason, refer to the debaters ONLY as '${humanLabel}' and '${aiLabel}'. Do NOT use the words 'AI', 'Human', '人类', '人工智能', or 'User' anywhere in the reason.\n` +
     `Return ONLY valid JSON: { "winner": "user" or "ai", "delta": 0/1/2/3/4/5, "reason": "one sentence" }`;
 
   try {
@@ -3431,6 +3409,7 @@ function hideCoachHint() {
 
 async function callCoach(aiText) {
   if (!S.coaching || !S.apiKey || !aiText) return;
+  const lang = S.language === 'chinese' ? 'Chinese (Mandarin)' : 'English';
   try {
     const resp = await fetch('https://api.openai.com/v1/chat/completions', {
       method:'POST',
@@ -3438,9 +3417,9 @@ async function callCoach(aiText) {
       body: JSON.stringify({
         model:'gpt-4o',
         messages:[{ role:'user',
-          content:`You are a debate coach. Topic: "${S.topic}".\nAI just said: "${aiText}"\nGive the human ONE short prep tip (max 1 sentence) to respond effectively. Output ONLY the tip.`
+          content:`You are a debate coach. Topic: "${S.topic}".\nOpponent just said: "${aiText}"\nGive the debater ONE direct counter-argument statement they can say verbatim right now to rebut this point. Write in ${lang}. Max 2 sentences. Output ONLY the ready-to-use statement, nothing else.`
         }],
-        max_tokens:60, temperature:0.7,
+        max_tokens:80, temperature:0.7,
       }),
     });
     if (!resp.ok) return;
@@ -3658,6 +3637,7 @@ function broadcastState() {
   mp.conn.send({
     type:        'state',
     phase:       M.phase,
+    aiSpeaking:  M.aiSpeaking,
     starPos:     M.starPos,
     koCount:     M.koCount,
     turn:        M.currentTurn,
@@ -3724,7 +3704,7 @@ function applyStateFromP1(data) {
         badge.classList.add('your-turn'); badge.textContent = '🎤 Your Turn';
       } else if (!isP2Turn && (data.phase === 'user_prep' || data.phase === 'user_record')) {
         badge.classList.add('ai-turn');   badge.textContent = '👤 P1\'s Turn';
-      } else if (data.phase === 'judging') {
+      } else if (data.phase === 'judging' && !data.aiSpeaking) {
         badge.classList.add('judge-turn'); badge.textContent = '⚖️ Judging…';
       } else { badge.textContent = '–'; }
     }
@@ -3811,6 +3791,10 @@ function applyStateFromP1(data) {
             afterUserSpeaks('');
           }
         });
+        // Show insight hint for P2 based on P1's last statement (solo only)
+        if (S.coaching && !mp.active && p1Text && p1Text !== '(skipped)' && typeof callCoach === 'function') {
+          callCoach(p1Text);
+        }
       };
 
       if (p1Text && p1Text !== '(skipped)' && S.apiKey) {
@@ -3983,8 +3967,16 @@ function onOpponentDisconnected() {
 // ── Patch: mode card — open lobby when multiplayer chosen ────
 document.getElementById('modeGroup').querySelectorAll('.mode-card').forEach(card => {
   card.addEventListener('click', () => {
-    if (card.dataset.mode === 'multiplayer' && S.topic) {
-      // Only open lobby if topic is already set
+    if (card.dataset.mode === 'multiplayer') {
+      // Auto-pick a random topic if none selected
+      if (!S.topic) {
+        S.topic = pickRandomTopic(S.category || 'all');
+        const zh  = S.language === 'chinese';
+        const lbl = (CAT_LABELS[S.category] || CAT_LABELS.all)[zh ? 'zh' : 'en'];
+        document.getElementById('topicDisplay').innerHTML =
+          `<span class="topic-cat-pill">${lbl}</span> ${esc(S.topic)}`;
+        checkReadyToStart();
+      }
       setTimeout(lobbyOpen, 150);
     }
   });
@@ -4000,7 +3992,15 @@ document.getElementById('startBattleBtn').addEventListener('click', (e) => {
       toast('Please set your OpenAI API key first');
       return;
     }
-    if (!S.topic) { toast('Please pick a topic first'); return; }
+    // Auto-pick a random topic if none selected
+    if (!S.topic) {
+      S.topic = pickRandomTopic(S.category || 'all');
+      const zh  = S.language === 'chinese';
+      const lbl = (CAT_LABELS[S.category] || CAT_LABELS.all)[zh ? 'zh' : 'en'];
+      document.getElementById('topicDisplay').innerHTML =
+        `<span class="topic-cat-pill">${lbl}</span> ${esc(S.topic)}`;
+      checkReadyToStart();
+    }
     lobbyOpen();
   }
   // Solo: fall through — the bubbling listener handles it
@@ -4054,14 +4054,17 @@ afterUserSpeaks = function(transcript) {
 // ═══════════════════════════════════════════════════════════
 function postMatchStart() {
   const result = S.matchResult || { winner: 'user', reason: 'time', starPos: 0.5 };
-  const isUser = result.winner === 'user';
+  // Bug 5: from P2's perspective, 'ai' in P1's model = P2 (local player winning)
+  const isUser = (mp.active && mp.role === 'p2')
+    ? result.winner === 'ai'    // P2 wins when result.winner === 'ai'
+    : result.winner === 'user'; // P1 or solo wins when result.winner === 'user'
 
   // Hero — large centered winner card
-  document.getElementById('pmTrophy').textContent = isUser ? '🏆' : '💀';
+  document.getElementById('pmTrophy').textContent = isUser ? '🏆' : '💔';
   const nameEl = document.getElementById('pmWinnerName');
-  nameEl.textContent = isUser ? 'YOU WIN!' : (mp.active && mp.role ? 'OPPONENT WINS!' : 'AI WINS!');
+  nameEl.textContent = isUser ? 'YOU WIN!' : 'YOU LOST!';
   nameEl.className   = 'pm-winner-name ' + (isUser ? 'user' : 'ai');
-  const reasonMap = { knockout: '⚡ Knockout Victory', time: '⏱ Time — Star Position' };
+  const reasonMap = { knockout: '⚡ Knockout', time: '⏱ Time — Star Position' };
   document.getElementById('pmReasonBadge').textContent =
     reasonMap[result.reason] || 'Match Complete';
 
