@@ -2700,6 +2700,7 @@ function mpMatchInit_P2() {
   _p2LastP1Text  = '';
   _p2TurnStarted = false;
   _p2StmtSent    = false;
+  _p2TimerRunning = false;  // Issue 2: reset timer-running flag on match init
   setStarPos(0.5);
   updateKoUI();
   updateTurnTimerUI();
@@ -3204,6 +3205,12 @@ async function callOpponent(userText) {
     if (!S.exchanges[M.exchangeNum]) S.exchanges[M.exchangeNum] = {};
     S.exchanges[M.exchangeNum].aiText      = text;
     S.exchanges[M.exchangeNum].aiSpeakDone  = false;
+    // Issue 1 fix: fire coaching immediately when AI text arrives (solo mode).
+    // In user-first flow this fires well before judge+KO path reaches runTurn('user'),
+    // so the hint is ready by the time Exchange 1 user turn actually starts.
+    if (!mp.active && S.coaching && typeof callCoach === 'function') {
+      callCoach(text);  // non-blocking — hint shows once GPT coach responds
+    }
     setCardBadge('ai','speaking');
     setCardText('ai', esc(text).replace(/\n/g,'<br>'));
     setMatchStatus('P1 is speaking…','speaking');
@@ -3463,6 +3470,9 @@ const mp = {
 let _p2LastP1Text    = '';
 // Bug-06: guard so P2's turn-start TTS+timer fires only once per turn
 let _p2TurnStarted   = false;
+// Issue 2 fix: P2 owns this flag — set true when P2's turn timer is running, false otherwise
+// Used to block P1 state broadcasts from overwriting P2's active countdown
+let _p2TimerRunning  = false;
 
 // ── Lobby UI helpers ─────────────────────────────────────────
 function lobbyOpen() {
@@ -3681,10 +3691,11 @@ function applyStateFromP1(data) {
     updateGameTimerUI();
   }
   if (data.turnTimerSecs !== undefined) {
-    // Bug 3 fix: during P2's own turn, manage timer locally — don't sync from P1 broadcast
-    // (P1 broadcasts a static value, applying it would cause double-tick on P2)
-    const isP2TurnPhase = (data.turn === 'ai') && (data.phase === 'ai_speak');
-    if (!isP2TurnPhase) {
+    // Issue 2 fix: use dedicated flag instead of inferring from P1's phase
+    // P1's phase can change to 'judging' WHILE P2's timer is running (e.g. if P1 receives
+    // P2's statement and calls checkAndJudge before P2's recording has fully ended).
+    // _p2TimerRunning is set/cleared by P2's own code — not dependent on P1's state.
+    if (!_p2TimerRunning) {
       M.turnTimerSecs = data.turnTimerSecs;
       updateTurnTimerUI();
     }
@@ -3782,6 +3793,7 @@ function applyStateFromP1(data) {
       // Not P2's turn — disable mic and reset turn-started guard
       micBtn.disabled  = true;
       _p2TurnStarted   = false;
+      _p2TimerRunning  = false;  // Issue 2: clear flag when P2's turn ends
       if (!wasDisabled) stopTurnTimer();  // P2's turn just ended
     } else if (isMyTurn && !_p2TurnStarted) {
       // Bug-06: P2's turn just started — play P1's TTS first, then open mic
@@ -3797,19 +3809,17 @@ function applyStateFromP1(data) {
         micBtn.disabled = false;
         M.phase = 'user_prep';
         // Bug 4: clear 'Opponent is speaking' now that it's P2's turn
-        setMatchStatus('Tap 🎙️ to record your argument', '');
+        setMatchStatus('Tap \uD83C\uDF99\uFE0F to record your argument', '');
         stopTurnTimer();
+        _p2TimerRunning = true;  // Issue 2: P2 owns the timer from here
         startTurnTimer(() => {
+          _p2TimerRunning = false;  // Issue 2: clear on natural expiry
           if (M.phase === 'user_prep' || M.phase === 'user_record') {
             toast('Time\'s up! Turn skipped.');
             stopVoiceCapture(false);
             afterUserSpeaks('');
           }
         });
-        // Show insight hint for P2 based on P1's last statement (solo only)
-        if (S.coaching && !mp.active && p1Text && p1Text !== '(skipped)' && typeof callCoach === 'function') {
-          callCoach(p1Text);
-        }
       };
 
       if (p1Text && p1Text !== '(skipped)' && S.apiKey) {
@@ -4041,6 +4051,7 @@ afterUserSpeaks = function(transcript) {
   if (mp.active && mp.role === 'p2') {
     if (_p2StmtSent) return;   // already sent this turn — ignore second call
     _p2StmtSent = true;
+    _p2TimerRunning = false;  // Issue 2: P2 submitted — timer no longer active
     stopTurnTimer();  // stop P2's own timer
     // MP-FIX-04: send '(skipped)' on empty so judge fires on P1
     const sendText = transcript || '(skipped)';
