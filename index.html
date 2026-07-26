@@ -1187,12 +1187,12 @@ header{
       <div class="mode-card active" data-mode="solo">
         <div class="mc-icon">🤖</div>
         <div class="mc-name">Solo vs AI</div>
-        <div class="mc-desc">Debate GPT-4o alone</div>
+        <div class="mc-desc">Single Player</div>
       </div>
       <div class="mode-card" data-mode="multiplayer">
         <div class="mc-icon">👥</div>
         <div class="mc-name">Human vs Human</div>
-        <div class="mc-desc">2 players via PeerJS</div>
+        <div class="mc-desc">Multiplayer</div>
       </div>
     </div>
   </div>
@@ -2335,6 +2335,7 @@ let _ttsAudio  = null;
 let _ttsAbort  = null;
 let _ttsGen    = 0;
 let _synthGen  = 0;
+let _synthResolve = null;  // explicit resolve hook for speakQuick() so stopSpeaking() can unblock it
 
 // MediaRecorder state (TODO-08 will expand)
 let _mediaRecorder = null;
@@ -2621,8 +2622,10 @@ function matchStart() {
     document.getElementById('gaugeLabelLeft').textContent  = '◀ P2 Advantage';
     document.getElementById('gaugeLabelRight').textContent = 'P1 Advantage ▶';
   } else {
-    document.getElementById('aiName').textContent        = "Opponent's Response";
-    document.getElementById('userCardName').textContent  = 'You';
+    // Bug 7: solo mode — label based on who won RPS (firstSpeaker = who goes first = P1)
+    const aiIsP1 = S.firstSpeaker === 'ai';
+    document.getElementById('aiName').textContent        = aiIsP1 ? 'Opponent (P1)' : 'Opponent (P2)';
+    document.getElementById('userCardName').textContent  = aiIsP1 ? 'You (P2)' : 'You (P1)';
     document.getElementById('gaugeLabelLeft').textContent  = '◀ AI Advantage';
     document.getElementById('gaugeLabelRight').textContent = 'User Advantage ▶';
   }
@@ -2922,8 +2925,11 @@ function checkAndJudge() {
   ex.judgeTriggered = true;
   M.phase = 'judging';
   document.getElementById('micBtn').disabled = true;
-  setTurnBanner('⚖️ JUDGE EVALUATING…', 'judge-turn');
-  setMatchStatus('Judge is evaluating the exchange…', 'processing');
+  // Bug 6: only show judging UI when TTS is NOT playing; if AI is still speaking, show after
+  if (!M.aiSpeaking) {
+    setTurnBanner('⚖️ JUDGE EVALUATING…', 'judge-turn');
+    setMatchStatus('Judge is evaluating the exchange…', 'processing');
+  }
   if (typeof callJudge === 'function') callJudge(ex.userText, ex.aiText);
 }
 
@@ -2948,8 +2954,8 @@ function handleKnockoutLogic() {
       document.getElementById('koIndicator').style.display = 'none';
       toast('⭐ Star escaped! Knockout reset.');
     }
-    // Always start next exchange with P1 (user) for strict alternation
-    runTurn('user');
+    // Bug 5: start next exchange with S.firstSpeaker to maintain consistent turn order
+    runTurn(S.firstSpeaker);
     return;
   }
 
@@ -3037,7 +3043,7 @@ async function startVoiceCapture() {
   setCardBadge('user', 'recording');
   setMatchStatus('Recording… tap the screen to stop', 'listening');
   document.getElementById('micBtn').classList.add('recording');
-  hideCoachHint();
+  // Bug 2: do NOT hide insight card while recording — keep it visible for reference
   showVoiceOverlay();
 
   const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4']
@@ -3223,6 +3229,8 @@ async function speak(text) {
   const gen = ++_ttsGen;
   if (_ttsAbort) { _ttsAbort.abort(); _ttsAbort=null; }
   if (_ttsAudio)  { _ttsAudio.pause(); _ttsAudio.src=''; _ttsAudio=null; }
+  // Bug 1: Robot voice always uses browser TTS
+  if (S.voice === 'robot') { return speakQuick(text); }
   if (!S.apiKey) { return speakQuick(text); }  // await browser synthesis
   const controller = new AbortController();
   _ttsAbort = controller;
@@ -3265,10 +3273,12 @@ function speakQuick(text) {
   ++_synthGen; _ttsGen++;
   if (_ttsAbort) { _ttsAbort.abort(); _ttsAbort=null; }
   if (_ttsAudio)  { _ttsAudio.pause(); _ttsAudio.src=''; _ttsAudio=null; }
+  if (_synthResolve) { const r = _synthResolve; _synthResolve = null; r(); }  // unblock any prior call
   if (window.speechSynthesis) window.speechSynthesis.cancel();
-  // BUG-FIX: return a Promise so callers can await speech completion
   return new Promise(resolve => {
     if (!window.speechSynthesis) { resolve(); return; }
+    _synthResolve = resolve;  // expose so stopSpeaking() can unblock this promise
+    const done = () => { _synthResolve = null; resolve(); };
     const utt = new SpeechSynthesisUtterance(text);
     utt.lang  = S.language==='chinese' ? 'zh-CN' : 'en-US';
     utt.rate  = 0.95;
@@ -3276,8 +3286,8 @@ function speakQuick(text) {
     const lang   = utt.lang.split('-')[0];
     const match  = voices.find(v => v.lang.startsWith(lang));
     if (match) utt.voice = match;
-    utt.onend   = resolve;
-    utt.onerror = resolve;
+    utt.onend   = done;
+    utt.onerror = done;
     window.speechSynthesis.speak(utt);
   });
 }
@@ -3287,6 +3297,8 @@ function stopSpeaking() {
   if (_ttsAbort) { _ttsAbort.abort(); _ttsAbort=null; }
   if (_ttsAudio)  { _ttsAudio.pause(); _ttsAudio.src=''; _ttsAudio=null; }
   if (window.speechSynthesis) window.speechSynthesis.cancel();
+  // Explicitly unblock any pending speakQuick() promise (some browsers skip onerror on cancel)
+  if (_synthResolve) { const r = _synthResolve; _synthResolve = null; r(); }
 }
 
 // Stop button: kills audio; handles opening-statement case (start user turn)
@@ -3669,9 +3681,10 @@ function applyStateFromP1(data) {
     updateGameTimerUI();
   }
   if (data.turnTimerSecs !== undefined) {
-    // Bug-02 fix: don't override P2's own running turn timer
-    // (P1 broadcasts a static 30 during the AI/P2 phase, which would reset P2's countdown)
-    if (!M.turnTimerInt) {
+    // Bug 3 fix: during P2's own turn, manage timer locally — don't sync from P1 broadcast
+    // (P1 broadcasts a static value, applying it would cause double-tick on P2)
+    const isP2TurnPhase = (data.turn === 'ai') && (data.phase === 'ai_speak');
+    if (!isP2TurnPhase) {
       M.turnTimerSecs = data.turnTimerSecs;
       updateTurnTimerUI();
     }
@@ -3783,6 +3796,8 @@ function applyStateFromP1(data) {
         if (M.phase === 'over' || !mp.active) return;
         micBtn.disabled = false;
         M.phase = 'user_prep';
+        // Bug 4: clear 'Opponent is speaking' now that it's P2's turn
+        setMatchStatus('Tap 🎙️ to record your argument', '');
         stopTurnTimer();
         startTurnTimer(() => {
           if (M.phase === 'user_prep' || M.phase === 'user_record') {
